@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 
 from ml.features.source_features import SourceFeatures, extract_source_features
 from ml.features.text_features import TextFeatures, extract_text_features
+from ml.inference.claims import ClaimAnalysis, analyze_claims
+from ml.inference.ml_model import predict_ml_score
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,8 @@ class ModuleScores:
     fact_score: float
     consensus_score: float
     consistency_score: float
+    claim_score: float
+    ml_score: float
 
 
 @dataclass(frozen=True)
@@ -42,12 +46,21 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         publish_date=article.publish_date,
         source_links=article.source_links,
     )
+    claim_analysis = analyze_claims(article.content)
 
     source_score, source_reasons = _score_source(source_features)
     linguistic_score, linguistic_reasons = _score_language(text_features)
-    fact_score, fact_reasons = _score_fact_markers(text_features)
-    consensus_score, consensus_reasons = _score_consensus(article, text_features)
+    fact_score, fact_reasons = _score_fact_markers(text_features, claim_analysis)
+    consensus_score, consensus_reasons = _score_consensus(source_features, text_features)
     consistency_score, consistency_reasons = _score_internal_consistency(text_features)
+    claim_score, claim_reasons = _score_claims(claim_analysis, text_features)
+    ml_score, ml_reason = predict_ml_score(
+        content=article.content,
+        url=article.url,
+        author=article.author,
+        publish_date=article.publish_date,
+        source_links=article.source_links,
+    )
 
     module_scores = ModuleScores(
         source_score=source_score,
@@ -55,16 +68,28 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         fact_score=fact_score,
         consensus_score=consensus_score,
         consistency_score=consistency_score,
+        claim_score=claim_score,
+        ml_score=round(ml_score, 3),
     )
     final_score = _clamp(
-        0.25 * source_score
-        + 0.25 * linguistic_score
-        + 0.20 * fact_score
-        + 0.15 * consensus_score
-        + 0.15 * consistency_score
+        0.17 * source_score
+        + 0.17 * linguistic_score
+        + 0.16 * fact_score
+        + 0.14 * consensus_score
+        + 0.13 * consistency_score
+        + 0.08 * claim_score
+        + 0.15 * ml_score
     )
 
-    reasons = source_reasons + linguistic_reasons + fact_reasons + consensus_reasons + consistency_reasons
+    reasons = (
+        source_reasons
+        + linguistic_reasons
+        + fact_reasons
+        + consensus_reasons
+        + consistency_reasons
+        + claim_reasons
+        + [ml_reason]
+    )
     return CredibilityResult(
         credibility_score=round(final_score, 3),
         credibility_level=_level(final_score),
@@ -74,6 +99,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
             "title": article.title,
             "url": article.url,
             "domain": source_features.domain,
+            "extracted_claims": claim_analysis.as_dict(),
             "text_features": text_features.as_dict(),
             "source_features": source_features.as_dict(),
         },
@@ -142,6 +168,18 @@ def _score_language(features: TextFeatures) -> tuple[float, list[str]]:
     if features.hedging_word_count >= 3:
         score -= 0.08
         reasons.append("Wiele sformulowan niepewnosciowych obniza jednoznacznosc przekazu.")
+    if features.manipulation_word_count >= 2:
+        score -= 0.10
+        reasons.append("Wykryto slowa wzmacniajace presje lub czarno-biale tezy.")
+    if features.conspiracy_word_count >= 1:
+        score -= 0.14
+        reasons.append("Tekst zawiera slownictwo typowe dla narracji spiskowych.")
+    if features.urgency_word_count >= 2:
+        score -= 0.08
+        reasons.append("Tekst buduje poczucie pilnosci zamiast spokojnej argumentacji.")
+    if features.authority_signal_count >= 2 and features.source_word_count >= 1:
+        score += 0.06
+        reasons.append("Tekst uzywa sygnalow eksperckich lub instytucjonalnych.")
     if features.avg_sentence_length > 34:
         score -= 0.05
         reasons.append("Bardzo dlugie zdania moga utrudniac weryfikacje twierdzen.")
@@ -151,7 +189,7 @@ def _score_language(features: TextFeatures) -> tuple[float, list[str]]:
     return _clamp(score), reasons
 
 
-def _score_fact_markers(features: TextFeatures) -> tuple[float, list[str]]:
+def _score_fact_markers(features: TextFeatures, claims: ClaimAnalysis) -> tuple[float, list[str]]:
     score = 0.45
     reasons: list[str] = []
 
@@ -167,6 +205,12 @@ def _score_fact_markers(features: TextFeatures) -> tuple[float, list[str]]:
     if features.url_count >= 1:
         score += 0.12
         reasons.append("Tekst zawiera linki, ktore mozna dalej zweryfikowac.")
+    if claims.evidence_marker_count >= 2:
+        score += 0.10
+        reasons.append("Czesc twierdzen ma jawne markery dowodow lub instytucji.")
+    if claims.unsupported_claim_count >= 2:
+        score -= 0.12
+        reasons.append("Wykryto kilka twierdzen bez widocznego wsparcia zrodlowego.")
     if features.word_count < 120:
         score -= 0.12
         reasons.append("Tekst jest krotki, wiec zawiera malo materialu do weryfikacji.")
@@ -174,20 +218,28 @@ def _score_fact_markers(features: TextFeatures) -> tuple[float, list[str]]:
     return _clamp(score), reasons
 
 
-def _score_consensus(article: ArticleInput, features: TextFeatures) -> tuple[float, list[str]]:
+def _score_consensus(source: SourceFeatures, features: TextFeatures) -> tuple[float, list[str]]:
     score = 0.50
     reasons: list[str] = []
-    links = article.source_links or []
 
-    if len(links) >= 4:
+    if source.source_link_count >= 4:
         score += 0.20
         reasons.append("Artykul linkuje do kilku zewnetrznych zrodel.")
-    elif len(links) >= 1:
+    elif source.source_link_count >= 1:
         score += 0.08
         reasons.append("Artykul zawiera przynajmniej jedno zewnetrzne zrodlo.")
     else:
         score -= 0.10
         reasons.append("Brak zewnetrznych linkow utrudnia cross-source verification.")
+    if source.unique_source_domain_count >= 3:
+        score += 0.12
+        reasons.append("Linki prowadza do kilku roznych domen, co wzmacnia consensus.")
+    elif source.source_link_count >= 3 and source.unique_source_domain_count <= 1:
+        score -= 0.08
+        reasons.append("Wiele linkow prowadzi do tej samej domeny, wiec consensus jest slaby.")
+    if source.reputable_source_link_count >= 1:
+        score += 0.08
+        reasons.append("Wsrod linkow zrodlowych jest domena o wysokiej reputacji.")
     if features.source_word_count >= 3:
         score += 0.10
 
@@ -209,6 +261,29 @@ def _score_internal_consistency(features: TextFeatures) -> tuple[float, list[str
     if features.sentence_count < 3:
         score -= 0.10
         reasons.append("Za malo zdan, aby solidnie ocenic spojnosc wewnetrzna.")
+
+    return _clamp(score), reasons
+
+
+def _score_claims(claims: ClaimAnalysis, features: TextFeatures) -> tuple[float, list[str]]:
+    score = 0.55
+    reasons: list[str] = []
+
+    if not claims.claims:
+        score -= 0.08
+        reasons.append("Nie wykryto wyraznych twierdzen faktograficznych do sprawdzenia.")
+    if claims.numeric_claim_count >= 2:
+        score += 0.10
+        reasons.append("Wykryto konkretne twierdzenia liczbowe.")
+    if claims.evidence_marker_count >= 2:
+        score += 0.16
+        reasons.append("Twierdzenia sa powiazane z markerami dowodow, np. raportem lub danymi.")
+    if claims.unsupported_claim_count >= 2:
+        score -= 0.18
+        reasons.append("Czesc twierdzen brzmi faktograficznie, ale nie ma widocznego wsparcia.")
+    if features.conspiracy_word_count and claims.evidence_marker_count == 0:
+        score -= 0.12
+        reasons.append("Narracja spiskowa pojawia sie bez markerow dowodowych.")
 
     return _clamp(score), reasons
 

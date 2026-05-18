@@ -4,12 +4,12 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
+import sklearn
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 
-from ml.features.source_features import extract_source_features
-from ml.features.text_features import extract_text_features
+from ml.features.feature_builder import MODEL_FEATURE_COLUMNS, build_model_features
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,30 +29,28 @@ def main() -> None:
     predictions = model.predict(x_test)
     mae = mean_absolute_error(y_test, predictions)
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"model": model, "features": list(features.columns), "mae": mae}, MODEL_PATH)
+    joblib.dump(
+        {
+            "model": model,
+            "features": MODEL_FEATURE_COLUMNS,
+            "mae": mae,
+            "sklearn_version": sklearn.__version__,
+        },
+        MODEL_PATH,
+    )
     print(f"Saved model to {MODEL_PATH}")
     print(f"Validation MAE: {mae:.3f}")
 
 
 def _row_features(row: pd.Series) -> dict[str, float]:
-    text = extract_text_features(str(row["content"])).as_dict()
-    source = extract_source_features(
-        url=str(row.get("url", "")),
-        author=str(row.get("author", "")),
-        publish_date=str(row.get("publish_date", "")),
-        source_links=str(row.get("source_links", "")).split("|") if row.get("source_links") else [],
-    ).as_dict()
-
-    return {
-        **text,
-        "has_url": float(source["has_url"]),
-        "uses_https": float(source["uses_https"]),
-        "known_reputable_domain": float(source["known_reputable_domain"]),
-        "suspicious_domain_hint": float(source["suspicious_domain_hint"]),
-        "has_author": float(source["has_author"]),
-        "has_publish_date": float(source["has_publish_date"]),
-        "source_link_count": float(source["source_link_count"]),
-    }
+    links = [] if pd.isna(row.get("source_links")) else [link for link in str(row.get("source_links", "")).split("|") if link]
+    return build_model_features(
+        content=str(row["content"]),
+        url=None if pd.isna(row.get("url")) else str(row.get("url", "")),
+        author=None if pd.isna(row.get("author")) else str(row.get("author", "")),
+        publish_date=None if pd.isna(row.get("publish_date")) else str(row.get("publish_date", "")),
+        source_links=links,
+    )
 
 
 if __name__ == "__main__":

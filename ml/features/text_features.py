@@ -75,6 +75,74 @@ SOURCE_WORDS = {
     "czasopismo",
 }
 
+MANIPULATION_WORDS = {
+    "must",
+    "never",
+    "always",
+    "everyone",
+    "nobody",
+    "proof",
+    "guaranteed",
+    "musisz",
+    "nigdy",
+    "zawsze",
+    "wszyscy",
+    "nikt",
+    "dowod",
+    "gwarantowane",
+}
+
+CONSPIRACY_WORDS = {
+    "coverup",
+    "cover-up",
+    "censored",
+    "elites",
+    "globalists",
+    "mainstream",
+    "hoax",
+    "spisek",
+    "cenzura",
+    "elity",
+    "globalisci",
+    "ukrywaja",
+    "klamstwo",
+}
+
+URGENCY_WORDS = {
+    "now",
+    "today",
+    "urgent",
+    "immediately",
+    "before",
+    "deleted",
+    "teraz",
+    "dzis",
+    "pilne",
+    "natychmiast",
+    "zanim",
+    "usuniete",
+}
+
+AUTHORITY_SIGNALS = {
+    "expert",
+    "experts",
+    "scientist",
+    "scientists",
+    "researcher",
+    "researchers",
+    "court",
+    "official",
+    "spokesperson",
+    "ekspert",
+    "eksperci",
+    "naukowiec",
+    "badacz",
+    "badacze",
+    "sad",
+    "oficjalny",
+    "rzecznik",
+}
+
 
 @dataclass(frozen=True)
 class TextFeatures:
@@ -92,6 +160,10 @@ class TextFeatures:
     clickbait_phrase_count: int
     hedging_word_count: int
     source_word_count: int
+    manipulation_word_count: int
+    conspiracy_word_count: int
+    urgency_word_count: int
+    authority_signal_count: int
 
     def as_dict(self) -> dict[str, float]:
         return asdict(self)
@@ -119,6 +191,10 @@ def extract_text_features(text: str) -> TextFeatures:
         clickbait_phrase_count=sum(1 for phrase in CLICKBAIT_PHRASES if phrase in normalized),
         hedging_word_count=_count_terms(normalized, HEDGING_WORDS),
         source_word_count=_count_terms(normalized, SOURCE_WORDS),
+        manipulation_word_count=_count_terms(normalized, MANIPULATION_WORDS),
+        conspiracy_word_count=_count_terms(normalized, CONSPIRACY_WORDS),
+        urgency_word_count=_count_terms(normalized, URGENCY_WORDS),
+        authority_signal_count=_count_terms(normalized, AUTHORITY_SIGNALS),
     )
 
 
@@ -130,15 +206,15 @@ def _count_terms(text: str, terms: set[str]) -> int:
 def _normalize(text: str) -> str:
     polish_ascii = str.maketrans(
         {
-            "ą": "a",
-            "ć": "c",
-            "ę": "e",
-            "ł": "l",
-            "ń": "n",
-            "ó": "o",
-            "ś": "s",
-            "ź": "z",
-            "ż": "z",
+            "\u0105": "a",
+            "\u0107": "c",
+            "\u0119": "e",
+            "\u0142": "l",
+            "\u0144": "n",
+            "\u00f3": "o",
+            "\u015b": "s",
+            "\u017a": "z",
+            "\u017c": "z",
         }
     )
     return text.lower().translate(polish_ascii)

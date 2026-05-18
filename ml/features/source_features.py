@@ -14,6 +14,7 @@ HIGH_REPUTATION_DOMAINS = {
     "science.org",
     "who.int",
     "gov.pl",
+    "stat.gov.pl",
     "ec.europa.eu",
     "pap.pl",
 }
@@ -41,6 +42,8 @@ class SourceFeatures:
     has_author: bool
     has_publish_date: bool
     source_link_count: int
+    unique_source_domain_count: int
+    reputable_source_link_count: int
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -55,6 +58,7 @@ def extract_source_features(
     parsed = urlparse(url or "")
     domain = _clean_domain(parsed.netloc) if parsed.netloc else None
     source_links = source_links or []
+    source_domains = [_clean_domain(urlparse(link).netloc) for link in source_links if urlparse(link).netloc]
 
     return SourceFeatures(
         domain=domain,
@@ -65,6 +69,8 @@ def extract_source_features(
         has_author=bool(author and author.strip()),
         has_publish_date=bool(publish_date and publish_date.strip()),
         source_link_count=len(source_links),
+        unique_source_domain_count=len(set(source_domains)),
+        reputable_source_link_count=sum(1 for source_domain in source_domains if source_domain in HIGH_REPUTATION_DOMAINS),
     )
 
 
