@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import requests
 from bs4 import BeautifulSoup
+from charset_normalizer import from_bytes
 import trafilatura
 
 
@@ -25,7 +26,7 @@ def fetch_article(url: str, timeout: int = 12) -> FetchedArticle:
     )
     response.raise_for_status()
 
-    html = response.text
+    html = _decode_html(response)
     extracted = trafilatura.extract(
         html,
         include_links=False,
@@ -46,6 +47,20 @@ def fetch_article(url: str, timeout: int = 12) -> FetchedArticle:
         publish_date=_meta(soup, ["article:published_time", "pubdate", "date", "datePublished"]),
         source_links=_links(soup),
     )
+
+
+def _decode_html(response: requests.Response) -> str:
+    detected = from_bytes(response.content).best()
+    if detected is not None:
+        return str(detected)
+
+    if response.encoding:
+        try:
+            return response.content.decode(response.encoding)
+        except (LookupError, UnicodeDecodeError):
+            pass
+
+    return response.content.decode("utf-8", errors="replace")
 
 
 def _title(soup: BeautifulSoup) -> str | None:
