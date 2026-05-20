@@ -69,13 +69,31 @@ docker compose up
 
 ## Trening modelu demonstracyjnego
 
-Dataset syntetyczny mozna wykorzystac do treningu lekkiego regresora:
+Dataset syntetyczny ma 200 rekordow i mozna go odtworzyc komenda:
+
+```bash
+python -m ml.training.generate_synthetic_dataset
+```
+
+Nastepnie mozna wykorzystac go do treningu lekkiego regresora:
 
 ```bash
 python -m ml.training.train_model
 ```
 
 Model zostanie zapisany w `ml/models/credibility_regressor.joblib`. Obecny pipeline produkcyjny uzywa deterministycznego, wyjasnialnego scoringu, co jest stabilniejsze dla malego datasetu MVP.
+
+Dodatkowo projekt ma model tekstowy `TF-IDF + Ridge`, ktory uczy sie wzorcow jezykowych bezposrednio z tresci:
+
+```bash
+python -m ml.training.train_text_model
+```
+
+Porownanie modelu na cechach, modelu tekstowego i prostego ensemble:
+
+```bash
+python -m ml.training.evaluate_models
+```
 
 ## Testy
 

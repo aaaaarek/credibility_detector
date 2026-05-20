@@ -61,6 +61,7 @@ def test_pipeline_returns_ml_and_claim_scores() -> None:
     )
 
     assert 0 <= result.module_scores.ml_score <= 1
+    assert 0 <= result.module_scores.text_ml_score <= 1
     assert 0 <= result.module_scores.claim_score <= 1
     assert result.metadata["extracted_claims"]["claims"]
 
@@ -80,3 +81,32 @@ def test_polish_conspiracy_language_is_penalized() -> None:
 
     assert result.credibility_score < 0.45
     assert any("spisk" in reason.lower() or "pilnosci" in reason.lower() for reason in result.reasons)
+
+
+def test_text_ml_score_distinguishes_reliable_and_clickbait_language() -> None:
+    reliable = analyze_article(
+        ArticleInput(
+            title="Court report",
+            content=(
+                "The court published a judgement with a case number and public register link. "
+                "The article summarises the decision, quotes named officials and separates confirmed facts "
+                "from reactions by the parties."
+            ),
+            url="https://reuters.com/world/court-report",
+            author="Reuters staff",
+            publish_date="2026-01-31",
+            source_links=["https://court.example.gov/judgement"],
+        )
+    )
+    clickbait = analyze_article(
+        ArticleInput(
+            title="Hidden secret",
+            content=(
+                "PILNE! Ukrywaja prawde i lekarze nie chca zebys wiedzial. "
+                "Udostepnij teraz zanim usuna ten sekret. Gwarantowany cud bez raportu i bez danych."
+            ),
+            url="http://viral-secret.example.com/post",
+        )
+    )
+
+    assert reliable.module_scores.text_ml_score > clickbait.module_scores.text_ml_score

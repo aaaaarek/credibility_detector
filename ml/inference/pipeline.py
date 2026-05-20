@@ -6,6 +6,7 @@ from ml.features.source_features import SourceFeatures, extract_source_features
 from ml.features.text_features import TextFeatures, extract_text_features
 from ml.inference.claims import ClaimAnalysis, analyze_claims
 from ml.inference.ml_model import predict_ml_score
+from ml.inference.text_model import predict_text_ml_score
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class ModuleScores:
     consistency_score: float
     claim_score: float
     ml_score: float
+    text_ml_score: float
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         publish_date=article.publish_date,
         source_links=article.source_links,
     )
+    text_ml_score, text_ml_reason = predict_text_ml_score(article.content)
 
     module_scores = ModuleScores(
         source_score=source_score,
@@ -70,15 +73,17 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         consistency_score=consistency_score,
         claim_score=claim_score,
         ml_score=round(ml_score, 3),
+        text_ml_score=round(text_ml_score, 3),
     )
     final_score = _clamp(
-        0.17 * source_score
-        + 0.17 * linguistic_score
-        + 0.16 * fact_score
-        + 0.14 * consensus_score
-        + 0.13 * consistency_score
-        + 0.08 * claim_score
-        + 0.15 * ml_score
+        0.15 * source_score
+        + 0.15 * linguistic_score
+        + 0.15 * fact_score
+        + 0.12 * consensus_score
+        + 0.11 * consistency_score
+        + 0.07 * claim_score
+        + 0.13 * ml_score
+        + 0.12 * text_ml_score
     )
 
     reasons = (
@@ -88,7 +93,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         + consensus_reasons
         + consistency_reasons
         + claim_reasons
-        + [ml_reason]
+        + [ml_reason, text_ml_reason]
     )
     return CredibilityResult(
         credibility_score=round(final_score, 3),
