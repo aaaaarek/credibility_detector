@@ -7,7 +7,10 @@ services:
     ports:
       - "8000:8000"
     command: >
-      sh -c "pip install --no-cache-dir -r requirements.txt &&
+      sh -c "apt-get update &&
+             apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-pol &&
+             rm -rf /var/lib/apt/lists/* &&
+             pip install --no-cache-dir -r requirements.txt &&
              uvicorn app.api.main:app --host 0.0.0.0 --port 8000"
 
   ui:
@@ -18,7 +21,10 @@ services:
     ports:
       - "8501:8501"
     command: >
-      sh -c "pip install --no-cache-dir -r requirements.txt &&
+      sh -c "apt-get update &&
+             apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-pol &&
+             rm -rf /var/lib/apt/lists/* &&
+             pip install --no-cache-dir -r requirements.txt &&
              streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501"
     depends_on:
       - api

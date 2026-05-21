@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from app.services.article_fetcher import fetch_article
+from app.services.file_extractor import extract_text_from_file
 from ml.inference.pipeline import ArticleInput, analyze_article, result_to_dict
 
 
@@ -35,9 +36,9 @@ def _render_result(result: dict[str, object]) -> None:
 st.set_page_config(page_title="Credibility Detector", layout="wide")
 
 st.title("Credibility Detector")
-st.caption("MVP: analiza wklejonego tekstu albo artykulu z URL.")
+st.caption("Analiza wklejonego tekstu, URL albo pliku.")
 
-tab_text, tab_url = st.tabs(["Tekst", "URL"])
+tab_text, tab_url, tab_file = st.tabs(["Tekst", "URL", "Plik"])
 
 with tab_text:
     title = st.text_input("Tytul", placeholder="Opcjonalnie")
@@ -88,3 +89,36 @@ with tab_url:
                     st.subheader(fetched.title or "Pobrany artykul")
                     st.write(fetched.content[:1200] + ("..." if len(fetched.content) > 1200 else ""))
                     _render_result(result_to_dict(result))
+
+with tab_file:
+    uploaded_file = st.file_uploader(
+        "Plik do analizy",
+        type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "webp"],
+    )
+    if st.button("Wyciagnij tekst i analizuj plik", type="primary", use_container_width=True):
+        if uploaded_file is None:
+            st.error("Wybierz plik PDF, DOCX, TXT albo obraz.")
+        else:
+            with st.spinner("Przetwarzam plik..."):
+                try:
+                    extracted = extract_text_from_file(uploaded_file.name, uploaded_file.getvalue())
+                    result = analyze_article(
+                        ArticleInput(
+                            title=extracted.filename,
+                            content=extracted.content,
+                        )
+                    )
+                except Exception as exc:
+                    st.error(f"Nie udalo sie przetworzyc pliku: {exc}")
+                else:
+                    st.subheader(extracted.filename)
+                    st.caption(f"Metoda ekstrakcji: {extracted.extraction_method}")
+                    st.write(extracted.content[:1200] + ("..." if len(extracted.content) > 1200 else ""))
+                    rendered = result_to_dict(result)
+                    rendered["metadata"]["file"] = {
+                        "filename": extracted.filename,
+                        "file_type": extracted.file_type,
+                        "extraction_method": extracted.extraction_method,
+                        "characters": len(extracted.content),
+                    }
+                    _render_result(rendered)

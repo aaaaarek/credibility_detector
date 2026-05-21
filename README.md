@@ -4,7 +4,7 @@ MVP systemu oceny wiarygodnosci artykulow. Projekt analizuje wklejony tekst albo
 
 ## Zakres MVP
 
-- wejscie: tekst lub URL,
+- wejscie: tekst, URL albo plik,
 - ekstrakcja tresci z URL przez `trafilatura` z fallbackiem BeautifulSoup,
 - modularny scoring:
   - `source_score`,
@@ -17,7 +17,7 @@ MVP systemu oceny wiarygodnosci artykulow. Projekt analizuje wklejony tekst albo
 - syntetyczny dataset w `data/datasets/synthetic_articles.csv`,
 - API w FastAPI i demo w Streamlit.
 
-MVP celowo nie obsluguje PDF, DOCX, OCR ani obrazow.
+Obsluga plikow obejmuje PDF, DOCX, TXT oraz obrazy przez OCR. OCR wymaga zainstalowanego programu Tesseract w systemie.
 
 ## Uruchomienie lokalne
 
@@ -66,6 +66,10 @@ docker compose up
   "url": "https://example.com/article"
 }
 ```
+
+`POST /analyze/file`
+
+Upload pliku przez formularz `multipart/form-data`, pole `file`.
 
 ## Trening modelu demonstracyjnego
 
