@@ -16,6 +16,7 @@ MVP systemu oceny wiarygodnosci artykulow. Projekt analizuje wklejony tekst albo
 - explainability,
 - syntetyczny dataset w `data/datasets/synthetic_articles.csv`,
 - API w FastAPI i demo w Streamlit.
+- dodatkowy `profile_score` dla postow i screenshotow, gdy znane sa dane profilu autora.
 
 Obsluga plikow obejmuje PDF, DOCX, TXT oraz obrazy przez OCR. OCR wymaga zainstalowanego programu Tesseract w systemie.
 
@@ -70,6 +71,17 @@ docker compose up
 `POST /analyze/file`
 
 Upload pliku przez formularz `multipart/form-data`, pole `file`.
+
+Dla postow z mediow spolecznosciowych mozna dodac metadata profilu:
+
+- `profile_name`
+- `profile_url`
+- `platform`
+- `is_verified`
+- `follower_count`
+- `account_age_days`
+
+To nie jest live scraping konta. System ocenia wiarygodnosc profilu na podstawie danych przekazanych przez uzytkownika albo uchwytu wykrytego w OCR.
 
 ## Trening modelu demonstracyjnego
 

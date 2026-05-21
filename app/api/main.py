@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.services.article_fetcher import fetch_article
 from app.services.file_extractor import extract_text_from_file
+from ml.features.profile_features import ProfileInput
 from ml.inference.pipeline import ArticleInput, analyze_article, result_to_dict
 
 
@@ -22,6 +23,12 @@ class TextAnalysisRequest(BaseModel):
     author: str | None = None
     publish_date: str | None = None
     source_links: list[HttpUrl] = Field(default_factory=list)
+    profile_name: str | None = None
+    profile_url: HttpUrl | None = None
+    platform: str | None = None
+    is_verified: bool | None = None
+    follower_count: int | None = Field(default=None, ge=0)
+    account_age_days: int | None = Field(default=None, ge=0)
 
 
 class UrlAnalysisRequest(BaseModel):
@@ -42,6 +49,14 @@ def analyze_text(payload: TextAnalysisRequest) -> dict[str, object]:
         author=payload.author,
         publish_date=payload.publish_date,
         source_links=[str(link) for link in payload.source_links],
+        profile=ProfileInput(
+            profile_name=payload.profile_name,
+            profile_url=str(payload.profile_url) if payload.profile_url else None,
+            platform=payload.platform,
+            is_verified=payload.is_verified,
+            follower_count=payload.follower_count,
+            account_age_days=payload.account_age_days,
+        ),
     )
     return result_to_dict(analyze_article(article))
 
@@ -65,7 +80,15 @@ def analyze_url(payload: UrlAnalysisRequest) -> dict[str, object]:
 
 
 @app.post("/analyze/file")
-async def analyze_file(file: UploadFile = File(...)) -> dict[str, object]:
+async def analyze_file(
+    file: UploadFile = File(...),
+    profile_name: str | None = Form(default=None),
+    profile_url: str | None = Form(default=None),
+    platform: str | None = Form(default=None),
+    is_verified: bool | None = Form(default=None),
+    follower_count: int | None = Form(default=None),
+    account_age_days: int | None = Form(default=None),
+) -> dict[str, object]:
     try:
         data = await file.read()
         extracted = extract_text_from_file(file.filename or "uploaded-file", data)
@@ -75,6 +98,14 @@ async def analyze_file(file: UploadFile = File(...)) -> dict[str, object]:
     article = ArticleInput(
         title=extracted.filename,
         content=extracted.content,
+        profile=ProfileInput(
+            profile_name=profile_name,
+            profile_url=profile_url,
+            platform=platform,
+            is_verified=is_verified,
+            follower_count=follower_count,
+            account_age_days=account_age_days,
+        ),
     )
     result = result_to_dict(analyze_article(article))
     result["metadata"]["file"] = {

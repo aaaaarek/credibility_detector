@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from ml.features.profile_features import ProfileFeatures, ProfileInput, extract_profile_features
 from ml.features.source_features import SourceFeatures, extract_source_features
 from ml.features.text_features import TextFeatures, extract_text_features
 from ml.inference.claims import ClaimAnalysis, analyze_claims
@@ -17,6 +18,7 @@ class ArticleInput:
     author: str | None = None
     publish_date: str | None = None
     source_links: list[str] | None = None
+    profile: ProfileInput | None = None
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class ModuleScores:
     consensus_score: float
     consistency_score: float
     claim_score: float
+    profile_score: float
     ml_score: float
     text_ml_score: float
 
@@ -48,6 +51,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         publish_date=article.publish_date,
         source_links=article.source_links,
     )
+    profile_features = extract_profile_features(article.profile, article.content)
     claim_analysis = analyze_claims(article.content)
 
     source_score, source_reasons = _score_source(source_features)
@@ -56,6 +60,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
     consensus_score, consensus_reasons = _score_consensus(source_features, text_features)
     consistency_score, consistency_reasons = _score_internal_consistency(text_features)
     claim_score, claim_reasons = _score_claims(claim_analysis, text_features)
+    profile_score, profile_reasons = _score_profile(profile_features)
     ml_score, ml_reason = predict_ml_score(
         content=article.content,
         url=article.url,
@@ -72,18 +77,20 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         consensus_score=consensus_score,
         consistency_score=consistency_score,
         claim_score=claim_score,
+        profile_score=profile_score,
         ml_score=round(ml_score, 3),
         text_ml_score=round(text_ml_score, 3),
     )
     final_score = _clamp(
-        0.15 * source_score
-        + 0.15 * linguistic_score
-        + 0.15 * fact_score
-        + 0.12 * consensus_score
-        + 0.11 * consistency_score
+        0.13 * source_score
+        + 0.14 * linguistic_score
+        + 0.14 * fact_score
+        + 0.10 * consensus_score
+        + 0.10 * consistency_score
         + 0.07 * claim_score
-        + 0.13 * ml_score
-        + 0.12 * text_ml_score
+        + 0.10 * profile_score
+        + 0.11 * ml_score
+        + 0.11 * text_ml_score
     )
 
     reasons = (
@@ -93,6 +100,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         + consensus_reasons
         + consistency_reasons
         + claim_reasons
+        + profile_reasons
         + [ml_reason, text_ml_reason]
     )
     return CredibilityResult(
@@ -105,6 +113,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
             "url": article.url,
             "domain": source_features.domain,
             "extracted_claims": claim_analysis.as_dict(),
+            "profile_features": profile_features.as_dict(),
             "text_features": text_features.as_dict(),
             "source_features": source_features.as_dict(),
         },
@@ -289,6 +298,47 @@ def _score_claims(claims: ClaimAnalysis, features: TextFeatures) -> tuple[float,
     if features.conspiracy_word_count and claims.evidence_marker_count == 0:
         score -= 0.12
         reasons.append("Narracja spiskowa pojawia sie bez markerow dowodowych.")
+
+    return _clamp(score), reasons
+
+
+def _score_profile(features: ProfileFeatures) -> tuple[float, list[str]]:
+    score = 0.50
+    reasons: list[str] = []
+
+    if not features.has_profile_name and not features.has_profile_url:
+        score -= 0.08
+        reasons.append("Brak danych o profilu ogranicza ocene wiarygodnosci autora posta.")
+    if features.has_profile_url:
+        score += 0.08
+        reasons.append("Podano URL profilu, co ulatwia weryfikacje autora.")
+    if features.known_platform:
+        score += 0.05
+    if features.is_verified is True:
+        score += 0.15
+        reasons.append("Profil jest oznaczony jako zweryfikowany.")
+    elif features.is_verified is False:
+        score -= 0.04
+        reasons.append("Profil nie jest oznaczony jako zweryfikowany.")
+    if features.follower_count is not None:
+        if features.follower_count >= 100_000:
+            score += 0.08
+            reasons.append("Profil ma duzy zasieg, co zwieksza odpowiedzialnosc i mozliwosc kontroli publicznej.")
+        elif features.follower_count < 100:
+            score -= 0.08
+            reasons.append("Profil ma bardzo maly zasieg, co utrudnia ocene reputacji.")
+    if features.account_age_days is not None:
+        if features.account_age_days >= 365:
+            score += 0.08
+            reasons.append("Profil istnieje od co najmniej roku.")
+        elif features.account_age_days < 30:
+            score -= 0.12
+            reasons.append("Profil jest bardzo nowy, co zwieksza ryzyko podszywania sie lub kampanii ad hoc.")
+    if features.suspicious_handle_hint:
+        score -= 0.10
+        reasons.append("Nazwa profilu zawiera sygnaly typowe dla kont sensacyjnych lub podszywajacych sie.")
+    if features.handle_from_text and not features.has_profile_url:
+        reasons.append("Wykryto uchwyt profilu w tekscie/OCR, ale brakuje URL do weryfikacji.")
 
     return _clamp(score), reasons
 

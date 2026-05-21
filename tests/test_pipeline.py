@@ -1,3 +1,4 @@
+from ml.features.profile_features import ProfileInput
 from ml.inference.pipeline import ArticleInput, analyze_article
 
 
@@ -62,6 +63,7 @@ def test_pipeline_returns_ml_and_claim_scores() -> None:
 
     assert 0 <= result.module_scores.ml_score <= 1
     assert 0 <= result.module_scores.text_ml_score <= 1
+    assert 0 <= result.module_scores.profile_score <= 1
     assert 0 <= result.module_scores.claim_score <= 1
     assert result.metadata["extracted_claims"]["claims"]
 
@@ -110,3 +112,41 @@ def test_text_ml_score_distinguishes_reliable_and_clickbait_language() -> None:
     )
 
     assert reliable.module_scores.text_ml_score > clickbait.module_scores.text_ml_score
+
+
+def test_profile_context_affects_social_post_analysis() -> None:
+    verified_profile = analyze_article(
+        ArticleInput(
+            title="Screenshot",
+            content=(
+                "@cityoffice opublikował raport o jakości wody. Według danych laboratoryjnych "
+                "wyniki z 24 punktów pomiarowych mieszczą się w normach."
+            ),
+            profile=ProfileInput(
+                profile_name="@cityoffice",
+                profile_url="https://x.com/cityoffice",
+                is_verified=True,
+                follower_count=120000,
+                account_age_days=1800,
+            ),
+        )
+    )
+    suspicious_profile = analyze_article(
+        ArticleInput(
+            title="Screenshot",
+            content=(
+                "@prawda_secret twierdzi, że władze ukrywają skażenie wody. "
+                "Nie pokazuje raportów ani danych i prosi o natychmiastowe udostępnianie."
+            ),
+            profile=ProfileInput(
+                profile_name="@prawda_secret",
+                profile_url="https://x.com/prawda_secret",
+                is_verified=False,
+                follower_count=40,
+                account_age_days=7,
+            ),
+        )
+    )
+
+    assert verified_profile.module_scores.profile_score > suspicious_profile.module_scores.profile_score
+    assert verified_profile.metadata["profile_features"]["known_platform"] is True

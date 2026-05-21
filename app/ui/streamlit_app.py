@@ -5,7 +5,38 @@ import streamlit as st
 
 from app.services.article_fetcher import fetch_article
 from app.services.file_extractor import extract_text_from_file
+from ml.features.profile_features import ProfileInput
 from ml.inference.pipeline import ArticleInput, analyze_article, result_to_dict
+
+
+def _profile_controls(section_key: str) -> ProfileInput:
+    with st.expander("Profil autora / konto społecznościowe"):
+        col_1, col_2 = st.columns(2)
+        profile_name = col_1.text_input("Nazwa profilu", key=f"{section_key}_profile_name")
+        profile_url = col_2.text_input("URL profilu", key=f"{section_key}_profile_url")
+        col_3, col_4, col_5 = st.columns(3)
+        platform = col_3.text_input("Platforma", placeholder="np. X, Facebook, TikTok", key=f"{section_key}_platform")
+        verified_raw = col_4.selectbox(
+            "Zweryfikowany",
+            options=["Nie wiem", "Tak", "Nie"],
+            key=f"{section_key}_verified",
+        )
+        follower_count = col_5.text_input("Liczba obserwujących", key=f"{section_key}_followers")
+        account_age_days = st.text_input("Wiek konta w dniach", key=f"{section_key}_account_age")
+
+    return ProfileInput(
+        profile_name=profile_name or None,
+        profile_url=profile_url or None,
+        platform=platform or None,
+        is_verified={"Tak": True, "Nie": False}.get(verified_raw),
+        follower_count=_optional_int(follower_count),
+        account_age_days=_optional_int(account_age_days),
+    )
+
+
+def _optional_int(value: str) -> int | None:
+    value = value.replace(" ", "").strip()
+    return int(value) if value.isdigit() else None
 
 
 def _render_result(result: dict[str, object]) -> None:
@@ -47,6 +78,7 @@ with tab_text:
     author = col_a.text_input("Autor", placeholder="Opcjonalnie")
     publish_date = col_b.text_input("Data publikacji", placeholder="Opcjonalnie")
     links_raw = st.text_area("Linki zrodlowe", height=90, placeholder="Jeden link na linie, opcjonalnie")
+    text_profile = _profile_controls("text")
 
     if st.button("Analizuj tekst", type="primary", use_container_width=True):
         if len(content.strip()) < 40:
@@ -60,6 +92,7 @@ with tab_text:
                     author=author or None,
                     publish_date=publish_date or None,
                     source_links=links,
+                    profile=text_profile,
                 )
             )
             _render_result(result_to_dict(result))
@@ -95,6 +128,7 @@ with tab_file:
         "Plik do analizy",
         type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "webp"],
     )
+    file_profile = _profile_controls("file")
     if st.button("Wyciagnij tekst i analizuj plik", type="primary", use_container_width=True):
         if uploaded_file is None:
             st.error("Wybierz plik PDF, DOCX, TXT albo obraz.")
@@ -106,6 +140,7 @@ with tab_file:
                         ArticleInput(
                             title=extracted.filename,
                             content=extracted.content,
+                            profile=file_profile,
                         )
                     )
                 except Exception as exc:
