@@ -194,3 +194,67 @@ def test_screenshot_with_unverified_handle_only_is_capped_lower() -> None:
 
     assert result.credibility_score <= 0.38
     assert result.module_scores["profile_score"] <= 0.35
+
+
+def test_repeated_character_gibberish_scores_very_low() -> None:
+    result = analyze_article(
+        ArticleInput(
+            title=None,
+            input_type="raw_text",
+            content="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+    )
+
+    assert result.credibility_score <= 0.10
+    assert "repeated_characters" in result.metadata["content_quality"]["flags"]
+
+
+def test_random_low_quality_text_scores_low() -> None:
+    result = analyze_article(
+        ArticleInput(
+            title=None,
+            input_type="raw_text",
+            content="asdf qwer zxcv asdf qwer zxcv asdf qwer zxcv",
+        )
+    )
+
+    assert result.credibility_score <= 0.25
+    assert result.metadata["content_quality"]["quality_score"] < 0.40
+
+
+def test_high_risk_claim_without_evidence_is_capped() -> None:
+    result = analyze_article(
+        ArticleInput(
+            title="Cudowny lek",
+            input_type="raw_text",
+            content=(
+                "Cudowny preparat leczy wszystkie nowotwory w 24 godziny. "
+                "Lekarze ukrywają prawdę i nie chcą, żeby pacjenci poznali ten sekret. "
+                "Kup teraz, zanim informacja zostanie usunięta."
+            ),
+        )
+    )
+
+    assert result.credibility_score <= 0.20
+    assert result.metadata["content_quality"]["high_risk_claim_count"] >= 1
+
+
+def test_reliable_article_is_not_capped_by_quality_gate() -> None:
+    result = analyze_article(
+        ArticleInput(
+            title="Agency report",
+            input_type="url",
+            content=(
+                "The public health agency published a report on 2026-02-12. "
+                "The report includes data from 120 hospitals, laboratory results and comments from named experts. "
+                "It links to the official dataset and explains the method used by researchers."
+            ),
+            url="https://gov.pl/report",
+            author="Agency desk",
+            publish_date="2026-02-12",
+            source_links=["https://gov.pl/dataset", "https://stat.gov.pl/report"],
+        )
+    )
+
+    assert result.metadata["content_quality"]["quality_score"] >= 0.70
+    assert result.credibility_score >= 0.65

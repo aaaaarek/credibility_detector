@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from ml.features.content_quality import ContentQuality, analyze_content_quality
 from ml.features.profile_features import ProfileFeatures, ProfileInput, extract_profile_features
 from ml.features.source_features import SourceFeatures, extract_source_features
 from ml.features.text_features import TextFeatures, extract_text_features
@@ -48,6 +49,7 @@ class CredibilityResult:
 
 def analyze_article(article: ArticleInput) -> CredibilityResult:
     text_features = extract_text_features(article.content)
+    content_quality = analyze_content_quality(article.content)
     source_features = extract_source_features(
         url=article.url,
         author=article.author,
@@ -89,9 +91,10 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
     module_scores = {name: all_scores_dict[name] for name in weights}
     diagnostic_scores = {name: value for name, value in all_scores_dict.items() if name not in weights}
     final_score = _weighted_score(module_scores, weights)
-    final_score = _apply_calibration_caps(final_score, all_scores_dict, article.input_type)
+    final_score = _apply_calibration_caps(final_score, all_scores_dict, article.input_type, content_quality)
 
     reason_groups = {
+        "content_quality": _content_quality_reasons(content_quality),
         "source_score": source_reasons,
         "linguistic_score": linguistic_reasons,
         "fact_score": fact_reasons,
@@ -102,7 +105,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         "ml_score": [ml_reason],
         "text_ml_score": [text_ml_reason],
     }
-    active_reasons = [reason for name in module_scores for reason in reason_groups[name]]
+    active_reasons = reason_groups["content_quality"] + [reason for name in module_scores for reason in reason_groups[name]]
     diagnostic_reasons = [reason for name in diagnostic_scores for reason in reason_groups[name]]
     return CredibilityResult(
         credibility_score=round(final_score, 3),
@@ -113,6 +116,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         metadata={
             "input_type": article.input_type,
             "weights": weights,
+            "content_quality": content_quality.as_dict(),
             "title": article.title,
             "url": article.url,
             "domain": source_features.domain,
@@ -386,9 +390,31 @@ def _weighted_score(scores: dict[str, float], weights: dict[str, float]) -> floa
     return _clamp(sum(scores[name] * weight for name, weight in weights.items()) / total_weight)
 
 
-def _apply_calibration_caps(score: float, scores: dict[str, float], input_type: InputType) -> float:
+def _content_quality_reasons(quality: ContentQuality) -> list[str]:
+    reasons: list[str] = []
+    if quality.quality_score < 0.20:
+        reasons.append("Tekst nie zawiera wystarczajacej tresci semantycznej do wiarygodnej analizy.")
+    elif quality.quality_score < 0.40:
+        reasons.append("Jakosc tekstu jest niska, wiec finalny wynik zostal ograniczony.")
+    if quality.high_risk_claim_count:
+        reasons.append("Wykryto twierdzenia wysokiego ryzyka wymagajace mocnych dowodow zrodlowych.")
+    return reasons
+
+
+def _apply_calibration_caps(
+    score: float,
+    scores: dict[str, float],
+    input_type: InputType,
+    quality: ContentQuality,
+) -> float:
     calibrated = score
 
+    if quality.quality_score < 0.20:
+        return min(calibrated, 0.10)
+    if quality.quality_score < 0.40:
+        calibrated = min(calibrated, 0.25)
+    if quality.high_risk_claim_count and scores["fact_score"] <= 0.45 and scores["consensus_score"] <= 0.45:
+        calibrated = min(calibrated, 0.20)
     if scores["linguistic_score"] <= 0.35 and scores["claim_score"] <= 0.45:
         calibrated = min(calibrated, 0.38)
     if scores["source_score"] <= 0.30 and scores["consensus_score"] <= 0.35 and input_type in {"url", "document"}:
