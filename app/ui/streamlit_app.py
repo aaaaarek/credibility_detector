@@ -39,9 +39,38 @@ def _optional_int(value: str) -> int | None:
     return int(value) if value.isdigit() else None
 
 
+def _score_color(score: float) -> str:
+    if score >= 0.80:
+        return "#16803c"
+    if score >= 0.70:
+        return "#2f8f4e"
+    if score >= 0.60:
+        return "#b7791f"
+    if score >= 0.50:
+        return "#b45309"
+    if score >= 0.40:
+        return "#c2410c"
+    return "#b91c1c"
+
+
 def _render_result(result: dict[str, object]) -> None:
     score = float(result["credibility_score"])
-    st.metric("Credibility score", f"{score:.3f}", result["credibility_level"])
+    color = _score_color(score)
+    st.metric("Credibility score", f"{score:.3f}")
+    st.markdown(
+        f"""
+        <div style="
+            color: {color};
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-top: -0.75rem;
+            margin-bottom: 0.75rem;
+        ">
+            {result["credibility_level"]}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.progress(score)
 
     col_1, col_2 = st.columns([1, 1])
