@@ -83,13 +83,17 @@ tab_text, tab_url, tab_file = st.tabs(["Tekst", "URL", "Plik"])
 
 with tab_text:
     title = st.text_input("Tytul", placeholder="Opcjonalnie")
-    input_type = st.selectbox("Typ wejscia", options=["raw_text", "screenshot", "document", "url"])
+    text_mode = st.selectbox(
+        "Rodzaj tekstu",
+        options=["Wklejony tekst", "Tekst z posta/screenshotu"],
+    )
+    input_type = "screenshot" if text_mode == "Tekst z posta/screenshotu" else "raw_text"
     content = st.text_area("Tresc artykulu", height=280, placeholder="Wklej tresc artykulu...")
     col_a, col_b = st.columns(2)
     author = col_a.text_input("Autor", placeholder="Opcjonalnie")
     publish_date = col_b.text_input("Data publikacji", placeholder="Opcjonalnie")
     links_raw = st.text_area("Linki zrodlowe", height=90, placeholder="Jeden link na linie, opcjonalnie")
-    text_profile = _profile_controls("text")
+    text_profile = _profile_controls("text") if input_type == "screenshot" else ProfileInput()
 
     if st.button("Analizuj tekst", type="primary", use_container_width=True):
         if len(content.strip()) < 40:
