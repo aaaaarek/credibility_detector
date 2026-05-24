@@ -89,7 +89,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
     all_scores_dict = _scores_to_dict(all_scores)
     weights = SCORE_WEIGHTS[article.input_type]
     module_scores = {name: all_scores_dict[name] for name in weights}
-    diagnostic_scores = {name: value for name, value in all_scores_dict.items() if name not in weights}
+    diagnostic_scores = _diagnostic_scores(all_scores_dict, weights, article, profile_features)
     final_score = _weighted_score(module_scores, weights)
     final_score = _apply_calibration_caps(final_score, all_scores_dict, article.input_type, content_quality)
 
@@ -398,6 +398,24 @@ def _weighted_score(scores: dict[str, float], weights: dict[str, float]) -> floa
     return _clamp(sum(scores[name] * weight for name, weight in weights.items()) / total_weight)
 
 
+def _diagnostic_scores(
+    scores: dict[str, float],
+    weights: dict[str, float],
+    article: ArticleInput,
+    profile_features: ProfileFeatures,
+) -> dict[str, float]:
+    diagnostic_names = [name for name in scores if name not in weights]
+    if article.input_type == "url":
+        diagnostic_names = [name for name in diagnostic_names if name in {"fact_score", "consistency_score"}]
+    if article.input_type == "document":
+        diagnostic_names = [name for name in diagnostic_names if name in {"fact_score", "consistency_score", "profile_score"}]
+    if article.input_type == "raw_text":
+        diagnostic_names = [name for name in diagnostic_names if name in {"fact_score", "consistency_score", "profile_score"}]
+    if not (profile_features.has_profile_name or profile_features.has_profile_url):
+        diagnostic_names = [name for name in diagnostic_names if name != "profile_score"]
+    return {name: scores[name] for name in diagnostic_names}
+
+
 def _content_quality_reasons(quality: ContentQuality) -> list[str]:
     reasons: list[str] = []
     if quality.quality_score < 0.20:
@@ -437,6 +455,21 @@ def _apply_calibration_caps(
         calibrated = min(calibrated, 0.35)
     if scores["source_score"] >= 0.85 and scores["claim_score"] >= 0.70 and scores["ml_score"] >= 0.75:
         calibrated = max(calibrated, 0.78)
+    if (
+        input_type == "url"
+        and scores["source_score"] >= 0.70
+        and scores["claim_score"] >= 0.70
+        and scores["fact_score"] >= 0.85
+        and scores["consensus_score"] >= 0.80
+    ):
+        calibrated = max(calibrated, 0.75)
+    if (
+        input_type == "document"
+        and scores["claim_score"] >= 0.70
+        and scores["fact_score"] >= 0.85
+        and scores["consensus_score"] >= 0.70
+    ):
+        calibrated = max(calibrated, 0.72)
 
     return _clamp(calibrated)
 InputType = Literal["url", "screenshot", "document", "raw_text"]

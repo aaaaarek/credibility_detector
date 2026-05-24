@@ -64,7 +64,7 @@ def test_pipeline_returns_ml_and_claim_scores() -> None:
     assert 0 <= result.module_scores["ml_score"] <= 1
     assert 0 <= result.module_scores["text_ml_score"] <= 1
     assert 0 <= result.module_scores["claim_score"] <= 1
-    assert "profile_score" in result.diagnostic_scores
+    assert "profile_score" not in result.diagnostic_scores
     assert result.metadata["extracted_claims"]["claims"]
 
 
@@ -177,8 +177,35 @@ def test_url_and_screenshot_use_different_active_modules() -> None:
 
     assert "source_score" in url_result.module_scores
     assert "profile_score" in screenshot_result.module_scores
-    assert "profile_score" in url_result.diagnostic_scores
+    assert "profile_score" not in url_result.diagnostic_scores
     assert "source_score" in screenshot_result.diagnostic_scores
+
+
+def test_strong_sourced_scientific_article_gets_positive_floor() -> None:
+    result = analyze_article(
+        ArticleInput(
+            title="Researchers publish clinical review",
+            input_type="url",
+            content=(
+                "Researchers from a university published a peer reviewed report on 2026-04-12. "
+                "According to the study, data from 120 hospitals and 4800 patients showed a 14 percent reduction "
+                "in complications. The article describes the methodology, cites named experts, links to the journal "
+                "paper, dataset, public registry and ministry report, and explains limitations of the research."
+            ),
+            url="https://nature.com/articles/clinical-review",
+            author="Science desk",
+            publish_date="2026-04-12",
+            source_links=[
+                "https://nature.com/paper",
+                "https://data.example.org/study",
+                "https://gov.pl/report",
+                "https://clinicaltrials.example.org/trial",
+            ],
+        )
+    )
+
+    assert result.credibility_score >= 0.75
+    assert "profile_score" not in result.diagnostic_scores
 
 
 def test_screenshot_with_unverified_handle_only_is_capped_lower() -> None:
