@@ -222,6 +222,25 @@ def test_random_low_quality_text_scores_low() -> None:
     assert result.metadata["content_quality"]["quality_score"] < 0.40
 
 
+def test_repeated_lines_score_very_low() -> None:
+    result = analyze_article(
+        ArticleInput(
+            title=None,
+            input_type="raw_text",
+            content=(
+                "zamawiam modelke i wciskam enter\n"
+                "zamawiam modelke i wciskam enter\n"
+                "zamawiam modelke i wciskam enter\n"
+                "zamawiam modelke i wciskam enter\n"
+                "zamawiam modelke i wciskam enter"
+            ),
+        )
+    )
+
+    assert result.credibility_score <= 0.10
+    assert "repeated_lines" in result.metadata["content_quality"]["flags"]
+
+
 def test_high_risk_claim_without_evidence_is_capped() -> None:
     result = analyze_article(
         ArticleInput(

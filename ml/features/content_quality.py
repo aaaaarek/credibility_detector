@@ -81,6 +81,8 @@ class ContentQuality:
     punctuation_ratio: float
     average_token_length: float
     repeated_token_ratio: float
+    repeated_line_ratio: float
+    repeated_ngram_ratio: float
     stopword_ratio: float
     high_risk_claim_count: int
     high_risk_claim_types: list[str]
@@ -92,6 +94,7 @@ class ContentQuality:
 def analyze_content_quality(text: str) -> ContentQuality:
     normalized = _normalize(text)
     tokens = re.findall(r"\b[\w'-]+\b", normalized)
+    lines = [_normalize(line.strip()) for line in text.splitlines() if line.strip()]
     sentences = [sentence for sentence in re.split(r"[.!?]+", text) if sentence.strip()]
     alpha_count = sum(1 for char in text if char.isalpha())
     punctuation_count = sum(1 for char in text if not char.isalnum() and not char.isspace())
@@ -109,6 +112,8 @@ def analyze_content_quality(text: str) -> ContentQuality:
         "punctuation_ratio": punctuation_count / max(len(text), 1),
         "average_token_length": sum(len(token) for token in tokens) / max(len(tokens), 1),
         "repeated_token_ratio": repeated_tokens / max(len(tokens), 1),
+        "repeated_line_ratio": _repeated_item_ratio(lines),
+        "repeated_ngram_ratio": _repeated_ngram_ratio(tokens, size=4),
         "stopword_ratio": sum(1 for token in tokens if token in STOPWORDS) / max(len(tokens), 1),
     }
     score, flags = _score_quality(metrics, high_risk_types)
@@ -152,6 +157,12 @@ def _score_quality(metrics: dict[str, float], high_risk_types: list[str]) -> tup
     if metrics["repeated_token_ratio"] > 0.50:
         score -= 0.25
         flags.append("repeated_tokens")
+    if metrics["repeated_line_ratio"] > 0.45:
+        score -= 0.70
+        flags.append("repeated_lines")
+    if metrics["repeated_ngram_ratio"] > 0.45:
+        score -= 0.45
+        flags.append("repeated_phrases")
     if metrics["word_count"] >= 8 and metrics["stopword_ratio"] < 0.05:
         score -= 0.18
         flags.append("low_function_word_ratio")
@@ -183,6 +194,22 @@ def _max_char_run(text: str) -> int:
             current = 1
             previous = char
     return longest
+
+
+def _repeated_item_ratio(items: list[str]) -> float:
+    if len(items) < 2:
+        return 0.0
+    normalized_items = [item for item in items if item]
+    if not normalized_items:
+        return 0.0
+    return (len(normalized_items) - len(set(normalized_items))) / len(normalized_items)
+
+
+def _repeated_ngram_ratio(tokens: list[str], size: int) -> float:
+    if len(tokens) < size * 2:
+        return 0.0
+    ngrams = [tuple(tokens[index : index + size]) for index in range(len(tokens) - size + 1)]
+    return _repeated_item_ratio([" ".join(ngram) for ngram in ngrams])
 
 
 def _normalize(text: str) -> str:
