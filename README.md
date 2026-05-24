@@ -17,6 +17,7 @@ MVP systemu oceny wiarygodnosci artykulow. Projekt analizuje wklejony tekst albo
 - syntetyczny dataset w `data/datasets/synthetic_articles.csv`,
 - API w FastAPI i demo w Streamlit.
 - dodatkowy `profile_score` dla postow i screenshotow, gdy znane sa dane profilu autora.
+- dynamiczne wagi zalezne od typu wejscia: `url`, `raw_text`, `document`, `screenshot`.
 
 Obsluga plikow obejmuje PDF, DOCX, TXT oraz obrazy przez OCR. OCR wymaga zainstalowanego programu Tesseract w systemie.
 
@@ -82,6 +83,8 @@ Dla postow z mediow spolecznosciowych mozna dodac metadata profilu:
 - `account_age_days`
 
 To nie jest live scraping konta. System ocenia wiarygodnosc profilu na podstawie danych przekazanych przez uzytkownika albo uchwytu wykrytego w OCR.
+
+Odpowiedz zawiera jeden finalny `credibility_score`. Pole `module_scores` pokazuje moduly uzyte w finalnym wyniku, a `diagnostic_scores` pokazuje sygnaly pomocnicze, ktore nie byly liczone dla danego typu wejscia.
 
 ## Trening modelu demonstracyjnego
 

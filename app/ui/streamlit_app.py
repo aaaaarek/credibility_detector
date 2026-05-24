@@ -63,6 +63,16 @@ def _render_result(result: dict[str, object]) -> None:
     with st.expander("Metadata i cechy"):
         st.json(result["metadata"])
 
+    if result.get("diagnostic_scores"):
+        with st.expander("Wyniki diagnostyczne"):
+            st.dataframe(
+                pd.DataFrame(
+                    [{"module": key, "score": value} for key, value in result["diagnostic_scores"].items()]
+                ),
+                hide_index=True,
+                use_container_width=True,
+            )
+
 
 st.set_page_config(page_title="Credibility Detector", layout="wide")
 
@@ -73,6 +83,7 @@ tab_text, tab_url, tab_file = st.tabs(["Tekst", "URL", "Plik"])
 
 with tab_text:
     title = st.text_input("Tytul", placeholder="Opcjonalnie")
+    input_type = st.selectbox("Typ wejscia", options=["raw_text", "screenshot", "document", "url"])
     content = st.text_area("Tresc artykulu", height=280, placeholder="Wklej tresc artykulu...")
     col_a, col_b = st.columns(2)
     author = col_a.text_input("Autor", placeholder="Opcjonalnie")
@@ -89,6 +100,7 @@ with tab_text:
                 ArticleInput(
                     title=title or None,
                     content=content,
+                    input_type=input_type,
                     author=author or None,
                     publish_date=publish_date or None,
                     source_links=links,
@@ -110,6 +122,7 @@ with tab_url:
                         ArticleInput(
                             title=fetched.title,
                             content=fetched.content,
+                            input_type="url",
                             url=fetched.url,
                             author=fetched.author,
                             publish_date=fetched.publish_date,
@@ -140,6 +153,9 @@ with tab_file:
                         ArticleInput(
                             title=extracted.filename,
                             content=extracted.content,
+                            input_type="screenshot"
+                            if extracted.file_type in {"png", "jpg", "jpeg", "webp"}
+                            else "document",
                             profile=file_profile,
                         )
                     )

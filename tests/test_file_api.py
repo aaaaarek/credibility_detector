@@ -31,4 +31,4 @@ def test_analyze_file_endpoint_accepts_txt_upload() -> None:
     assert "credibility_score" in payload
     assert payload["metadata"]["file"]["file_type"] == "txt"
     assert payload["metadata"]["profile_features"]["profile_name"] == "@cityoffice"
-    assert payload["module_scores"]["profile_score"] > 0.5
+    assert payload["diagnostic_scores"]["profile_score"] > 0.5

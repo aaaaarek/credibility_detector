@@ -61,10 +61,10 @@ def test_pipeline_returns_ml_and_claim_scores() -> None:
         )
     )
 
-    assert 0 <= result.module_scores.ml_score <= 1
-    assert 0 <= result.module_scores.text_ml_score <= 1
-    assert 0 <= result.module_scores.profile_score <= 1
-    assert 0 <= result.module_scores.claim_score <= 1
+    assert 0 <= result.module_scores["ml_score"] <= 1
+    assert 0 <= result.module_scores["text_ml_score"] <= 1
+    assert 0 <= result.module_scores["claim_score"] <= 1
+    assert "profile_score" in result.diagnostic_scores
     assert result.metadata["extracted_claims"]["claims"]
 
 
@@ -111,13 +111,14 @@ def test_text_ml_score_distinguishes_reliable_and_clickbait_language() -> None:
         )
     )
 
-    assert reliable.module_scores.text_ml_score > clickbait.module_scores.text_ml_score
+    assert reliable.module_scores["text_ml_score"] > clickbait.module_scores["text_ml_score"]
 
 
 def test_profile_context_affects_social_post_analysis() -> None:
     verified_profile = analyze_article(
         ArticleInput(
             title="Screenshot",
+            input_type="screenshot",
             content=(
                 "@cityoffice opublikował raport o jakości wody. Według danych laboratoryjnych "
                 "wyniki z 24 punktów pomiarowych mieszczą się w normach."
@@ -134,6 +135,7 @@ def test_profile_context_affects_social_post_analysis() -> None:
     suspicious_profile = analyze_article(
         ArticleInput(
             title="Screenshot",
+            input_type="screenshot",
             content=(
                 "@prawda_secret twierdzi, że władze ukrywają skażenie wody. "
                 "Nie pokazuje raportów ani danych i prosi o natychmiastowe udostępnianie."
@@ -148,5 +150,32 @@ def test_profile_context_affects_social_post_analysis() -> None:
         )
     )
 
-    assert verified_profile.module_scores.profile_score > suspicious_profile.module_scores.profile_score
+    assert verified_profile.module_scores["profile_score"] > suspicious_profile.module_scores["profile_score"]
     assert verified_profile.metadata["profile_features"]["known_platform"] is True
+
+
+def test_url_and_screenshot_use_different_active_modules() -> None:
+    url_result = analyze_article(
+        ArticleInput(
+            title="Report",
+            input_type="url",
+            content="The agency published a report with data, named experts and source documents in 2026.",
+            url="https://gov.pl/report",
+            author="Agency desk",
+            publish_date="2026-02-12",
+            source_links=["https://gov.pl/data"],
+        )
+    )
+    screenshot_result = analyze_article(
+        ArticleInput(
+            title="Screenshot",
+            input_type="screenshot",
+            content="@cityoffice published a report with data, named experts and source documents in 2026.",
+            profile=ProfileInput(profile_name="@cityoffice", profile_url="https://x.com/cityoffice", is_verified=True),
+        )
+    )
+
+    assert "source_score" in url_result.module_scores
+    assert "profile_score" in screenshot_result.module_scores
+    assert "profile_score" in url_result.diagnostic_scores
+    assert "source_score" in screenshot_result.diagnostic_scores

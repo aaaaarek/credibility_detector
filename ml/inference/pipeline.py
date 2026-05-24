@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+from typing import Literal
 
 from ml.features.profile_features import ProfileFeatures, ProfileInput, extract_profile_features
 from ml.features.source_features import SourceFeatures, extract_source_features
@@ -14,6 +15,7 @@ from ml.inference.text_model import predict_text_ml_score
 class ArticleInput:
     title: str | None
     content: str
+    input_type: InputType = "raw_text"
     url: str | None = None
     author: str | None = None
     publish_date: str | None = None
@@ -38,7 +40,8 @@ class ModuleScores:
 class CredibilityResult:
     credibility_score: float
     credibility_level: str
-    module_scores: ModuleScores
+    module_scores: dict[str, float]
+    diagnostic_scores: dict[str, float]
     reasons: list[str]
     metadata: dict[str, object]
 
@@ -70,7 +73,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
     )
     text_ml_score, text_ml_reason = predict_text_ml_score(article.content)
 
-    module_scores = ModuleScores(
+    all_scores = ModuleScores(
         source_score=source_score,
         linguistic_score=linguistic_score,
         fact_score=fact_score,
@@ -81,34 +84,35 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         ml_score=round(ml_score, 3),
         text_ml_score=round(text_ml_score, 3),
     )
-    final_score = _clamp(
-        0.13 * source_score
-        + 0.14 * linguistic_score
-        + 0.14 * fact_score
-        + 0.10 * consensus_score
-        + 0.10 * consistency_score
-        + 0.07 * claim_score
-        + 0.10 * profile_score
-        + 0.11 * ml_score
-        + 0.11 * text_ml_score
-    )
+    all_scores_dict = _scores_to_dict(all_scores)
+    weights = SCORE_WEIGHTS[article.input_type]
+    module_scores = {name: all_scores_dict[name] for name in weights}
+    diagnostic_scores = {name: value for name, value in all_scores_dict.items() if name not in weights}
+    final_score = _weighted_score(module_scores, weights)
+    final_score = _apply_calibration_caps(final_score, all_scores_dict, article.input_type)
 
-    reasons = (
-        source_reasons
-        + linguistic_reasons
-        + fact_reasons
-        + consensus_reasons
-        + consistency_reasons
-        + claim_reasons
-        + profile_reasons
-        + [ml_reason, text_ml_reason]
-    )
+    reason_groups = {
+        "source_score": source_reasons,
+        "linguistic_score": linguistic_reasons,
+        "fact_score": fact_reasons,
+        "consensus_score": consensus_reasons,
+        "consistency_score": consistency_reasons,
+        "claim_score": claim_reasons,
+        "profile_score": profile_reasons,
+        "ml_score": [ml_reason],
+        "text_ml_score": [text_ml_reason],
+    }
+    active_reasons = [reason for name in module_scores for reason in reason_groups[name]]
+    diagnostic_reasons = [reason for name in diagnostic_scores for reason in reason_groups[name]]
     return CredibilityResult(
         credibility_score=round(final_score, 3),
         credibility_level=_level(final_score),
         module_scores=module_scores,
-        reasons=reasons[:8],
+        diagnostic_scores=diagnostic_scores,
+        reasons=(active_reasons + diagnostic_reasons)[:8],
         metadata={
+            "input_type": article.input_type,
+            "weights": weights,
             "title": article.title,
             "url": article.url,
             "domain": source_features.domain,
@@ -124,7 +128,8 @@ def result_to_dict(result: CredibilityResult) -> dict[str, object]:
     return {
         "credibility_score": result.credibility_score,
         "credibility_level": result.credibility_level,
-        "module_scores": asdict(result.module_scores),
+        "module_scores": result.module_scores,
+        "diagnostic_scores": result.diagnostic_scores,
         "reasons": result.reasons,
         "metadata": result.metadata,
     }
@@ -355,3 +360,76 @@ def _level(score: float) -> str:
 
 def _clamp(value: float) -> float:
     return max(0.0, min(1.0, value))
+
+
+def _scores_to_dict(scores: ModuleScores) -> dict[str, float]:
+    return {
+        "source_score": scores.source_score,
+        "linguistic_score": scores.linguistic_score,
+        "fact_score": scores.fact_score,
+        "consensus_score": scores.consensus_score,
+        "consistency_score": scores.consistency_score,
+        "claim_score": scores.claim_score,
+        "profile_score": scores.profile_score,
+        "ml_score": scores.ml_score,
+        "text_ml_score": scores.text_ml_score,
+    }
+
+
+def _weighted_score(scores: dict[str, float], weights: dict[str, float]) -> float:
+    total_weight = sum(weights.values())
+    if total_weight <= 0:
+        return 0.0
+    return _clamp(sum(scores[name] * weight for name, weight in weights.items()) / total_weight)
+
+
+def _apply_calibration_caps(score: float, scores: dict[str, float], input_type: InputType) -> float:
+    calibrated = score
+
+    if scores["linguistic_score"] <= 0.35 and scores["claim_score"] <= 0.45:
+        calibrated = min(calibrated, 0.38)
+    if scores["source_score"] <= 0.30 and scores["consensus_score"] <= 0.35 and input_type in {"url", "document"}:
+        calibrated = min(calibrated, 0.42)
+    if scores["profile_score"] <= 0.30 and input_type == "screenshot":
+        calibrated = min(calibrated, 0.42)
+    if scores["profile_score"] <= 0.35 and scores["text_ml_score"] <= 0.35 and input_type == "screenshot":
+        calibrated = min(calibrated, 0.35)
+    if scores["source_score"] >= 0.85 and scores["claim_score"] >= 0.70 and scores["ml_score"] >= 0.75:
+        calibrated = max(calibrated, 0.78)
+
+    return _clamp(calibrated)
+InputType = Literal["url", "screenshot", "document", "raw_text"]
+
+SCORE_WEIGHTS: dict[InputType, dict[str, float]] = {
+    "url": {
+        "source_score": 0.25,
+        "claim_score": 0.20,
+        "ml_score": 0.20,
+        "text_ml_score": 0.15,
+        "consensus_score": 0.15,
+        "linguistic_score": 0.05,
+    },
+    "screenshot": {
+        "profile_score": 0.30,
+        "claim_score": 0.25,
+        "text_ml_score": 0.20,
+        "linguistic_score": 0.15,
+        "ml_score": 0.10,
+    },
+    "document": {
+        "claim_score": 0.25,
+        "ml_score": 0.25,
+        "text_ml_score": 0.20,
+        "linguistic_score": 0.10,
+        "source_score": 0.10,
+        "consensus_score": 0.10,
+    },
+    "raw_text": {
+        "claim_score": 0.30,
+        "text_ml_score": 0.25,
+        "linguistic_score": 0.20,
+        "ml_score": 0.15,
+        "source_score": 0.05,
+        "consensus_score": 0.05,
+    },
+}

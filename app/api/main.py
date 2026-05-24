@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from app.services.article_fetcher import fetch_article
 from app.services.file_extractor import extract_text_from_file
 from ml.features.profile_features import ProfileInput
-from ml.inference.pipeline import ArticleInput, analyze_article, result_to_dict
+from ml.inference.pipeline import ArticleInput, InputType, analyze_article, result_to_dict
 
 
 app = FastAPI(
@@ -19,6 +19,7 @@ app = FastAPI(
 class TextAnalysisRequest(BaseModel):
     title: str | None = None
     content: str = Field(..., min_length=40)
+    input_type: InputType = "raw_text"
     url: HttpUrl | None = None
     author: str | None = None
     publish_date: str | None = None
@@ -45,6 +46,7 @@ def analyze_text(payload: TextAnalysisRequest) -> dict[str, object]:
     article = ArticleInput(
         title=payload.title,
         content=payload.content,
+        input_type=payload.input_type,
         url=str(payload.url) if payload.url else None,
         author=payload.author,
         publish_date=payload.publish_date,
@@ -71,6 +73,7 @@ def analyze_url(payload: UrlAnalysisRequest) -> dict[str, object]:
     article = ArticleInput(
         title=fetched.title,
         content=fetched.content,
+        input_type="url",
         url=fetched.url,
         author=fetched.author,
         publish_date=fetched.publish_date,
@@ -98,6 +101,7 @@ async def analyze_file(
     article = ArticleInput(
         title=extracted.filename,
         content=extracted.content,
+        input_type="screenshot" if extracted.file_type in {"png", "jpg", "jpeg", "webp"} else "document",
         profile=ProfileInput(
             profile_name=profile_name,
             profile_url=profile_url,
