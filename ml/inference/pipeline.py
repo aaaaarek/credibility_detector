@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ml.features.content_quality import ContentQuality, analyze_content_quality
+from ml.features.document_features import DocumentFeatures, extract_document_features
 from ml.features.profile_features import ProfileFeatures, ProfileInput, extract_profile_features
 from ml.features.source_features import SourceFeatures, extract_source_features
 from ml.features.text_features import TextFeatures, extract_text_features
@@ -57,6 +58,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         source_links=article.source_links,
     )
     profile_features = extract_profile_features(article.profile, article.content)
+    document_features = extract_document_features(article.content)
     claim_analysis = analyze_claims(article.content)
 
     source_score, source_reasons = _score_source(source_features)
@@ -91,7 +93,13 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
     module_scores = {name: all_scores_dict[name] for name in weights}
     diagnostic_scores = _diagnostic_scores(all_scores_dict, weights, article, profile_features)
     final_score = _weighted_score(module_scores, weights)
-    final_score = _apply_calibration_caps(final_score, all_scores_dict, article.input_type, content_quality)
+    final_score = _apply_calibration_caps(
+        final_score,
+        all_scores_dict,
+        article.input_type,
+        content_quality,
+        document_features,
+    )
 
     reason_groups = {
         "content_quality": _content_quality_reasons(content_quality),
@@ -117,6 +125,7 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
             "input_type": article.input_type,
             "weights": weights,
             "content_quality": content_quality.as_dict(),
+            "document_features": document_features.as_dict(),
             "title": article.title,
             "url": article.url,
             "domain": source_features.domain,
@@ -432,6 +441,7 @@ def _apply_calibration_caps(
     scores: dict[str, float],
     input_type: InputType,
     quality: ContentQuality,
+    document: DocumentFeatures,
 ) -> float:
     calibrated = score
 
@@ -470,6 +480,10 @@ def _apply_calibration_caps(
         and scores["consensus_score"] >= 0.70
     ):
         calibrated = max(calibrated, 0.72)
+    if input_type == "document" and document.scientific_document_score >= 0.70 and scores["fact_score"] >= 0.70:
+        calibrated = max(calibrated, 0.76)
+    if input_type == "document" and document.scientific_document_score >= 0.85 and scores["fact_score"] >= 0.80:
+        calibrated = max(calibrated, 0.82)
 
     return _clamp(calibrated)
 InputType = Literal["url", "screenshot", "document", "raw_text"]
@@ -491,12 +505,13 @@ SCORE_WEIGHTS: dict[InputType, dict[str, float]] = {
         "ml_score": 0.20,
     },
     "document": {
-        "claim_score": 0.20,
-        "ml_score": 0.30,
-        "text_ml_score": 0.25,
+        "fact_score": 0.25,
+        "claim_score": 0.18,
+        "ml_score": 0.22,
+        "text_ml_score": 0.18,
         "linguistic_score": 0.05,
-        "source_score": 0.10,
-        "consensus_score": 0.10,
+        "source_score": 0.06,
+        "consensus_score": 0.06,
     },
     "raw_text": {
         "claim_score": 0.25,

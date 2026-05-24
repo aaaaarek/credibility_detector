@@ -62,6 +62,7 @@ HIGH_RISK_PATTERNS = {
         r"\b(ukrywaj\w+|hide|hate|nienawidz\w+)\b",
     ],
     "absolute_health_claim": [
+        r"\b(leczy|wyleczy|cures?|cure)\b",
         r"\b(wszystkie|every|all)\b",
         r"\b(nowotwor\w+|cancer|chorob\w+|disease\w+)\b",
     ],

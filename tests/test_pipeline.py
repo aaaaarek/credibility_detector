@@ -315,3 +315,31 @@ def test_reliable_article_is_not_capped_by_quality_gate() -> None:
 
     assert result.metadata["content_quality"]["quality_score"] >= 0.70
     assert result.credibility_score >= 0.65
+
+
+def test_scientific_pdf_like_document_scores_high() -> None:
+    content = (
+        "ARTICLE IN PRESS Deep learning and radiomics models in patients with advanced non-small cell lung cancer "
+        "treated with immunotherapy combined with stereotactic radiotherapy. Scientific Reports. "
+        "Received: 22 September 2025 Accepted: 12 May 2026. "
+        "Kothari G., Hardcastle N., Perera R. et al. "
+        "https://doi.org/10.1038/s41598-026-53520-5 "
+        "Abstract: This study analysed clinical data from 120 patients and radiomics features from imaging. "
+        "Methods: researchers trained deep learning models and compared validation performance. "
+        "Results: the model reported 0.81 AUC and confidence intervals across cross validation folds. "
+        "Discussion: the article explains limitations, sample size and external validation requirements. "
+        "References: Smith et al. 2024. Jones et al. 2025. Scientific Reports open access article."
+    )
+
+    result = analyze_article(
+        ArticleInput(
+            title="s41598-026-53520-5_reference.pdf",
+            input_type="document",
+            content=content,
+        )
+    )
+
+    assert result.credibility_score >= 0.76
+    assert result.metadata["document_features"]["has_doi"] is True
+    assert result.metadata["document_features"]["scientific_document_score"] >= 0.70
+    assert "fact_score" in result.module_scores
