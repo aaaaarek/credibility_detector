@@ -179,3 +179,18 @@ def test_url_and_screenshot_use_different_active_modules() -> None:
     assert "profile_score" in screenshot_result.module_scores
     assert "profile_score" in url_result.diagnostic_scores
     assert "source_score" in screenshot_result.diagnostic_scores
+
+
+def test_screenshot_with_unverified_handle_only_is_capped_lower() -> None:
+    result = analyze_article(
+        ArticleInput(
+            title="Screenshot",
+            input_type="screenshot",
+            content=(
+                "@prawda_secret says doctors hide the truth and asks everyone to share before it is deleted."
+            ),
+        )
+    )
+
+    assert result.credibility_score <= 0.38
+    assert result.module_scores["profile_score"] <= 0.35

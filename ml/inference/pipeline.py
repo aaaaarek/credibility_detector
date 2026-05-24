@@ -136,10 +136,11 @@ def result_to_dict(result: CredibilityResult) -> dict[str, object]:
 
 
 def _score_source(features: SourceFeatures) -> tuple[float, list[str]]:
-    score = 0.55
+    score = 0.50
     reasons: list[str] = []
 
     if not features.has_url:
+        score -= 0.12
         reasons.append("Brak URL ogranicza ocene reputacji zrodla.")
     if features.uses_https:
         score += 0.08
@@ -155,16 +156,17 @@ def _score_source(features: SourceFeatures) -> tuple[float, list[str]]:
     if features.has_author:
         score += 0.08
     else:
-        score -= 0.05
+        score -= 0.08
         reasons.append("Brakuje rozpoznanego autora.")
     if features.has_publish_date:
         score += 0.07
     else:
+        score -= 0.05
         reasons.append("Brakuje daty publikacji.")
     if features.source_link_count >= 3:
         score += 0.10
     elif features.source_link_count == 0:
-        score -= 0.05
+        score -= 0.10
         reasons.append("Nie wykryto linkow do zrodel zewnetrznych.")
 
     return _clamp(score), reasons
@@ -238,7 +240,7 @@ def _score_fact_markers(features: TextFeatures, claims: ClaimAnalysis) -> tuple[
 
 
 def _score_consensus(source: SourceFeatures, features: TextFeatures) -> tuple[float, list[str]]:
-    score = 0.50
+    score = 0.45
     reasons: list[str] = []
 
     if source.source_link_count >= 4:
@@ -248,7 +250,7 @@ def _score_consensus(source: SourceFeatures, features: TextFeatures) -> tuple[fl
         score += 0.08
         reasons.append("Artykul zawiera przynajmniej jedno zewnetrzne zrodlo.")
     else:
-        score -= 0.10
+        score -= 0.18
         reasons.append("Brak zewnetrznych linkow utrudnia cross-source verification.")
     if source.unique_source_domain_count >= 3:
         score += 0.12
@@ -289,7 +291,7 @@ def _score_claims(claims: ClaimAnalysis, features: TextFeatures) -> tuple[float,
     reasons: list[str] = []
 
     if not claims.claims:
-        score -= 0.08
+        score -= 0.12
         reasons.append("Nie wykryto wyraznych twierdzen faktograficznych do sprawdzenia.")
     if claims.numeric_claim_count >= 2:
         score += 0.10
@@ -298,7 +300,7 @@ def _score_claims(claims: ClaimAnalysis, features: TextFeatures) -> tuple[float,
         score += 0.16
         reasons.append("Twierdzenia sa powiazane z markerami dowodow, np. raportem lub danymi.")
     if claims.unsupported_claim_count >= 2:
-        score -= 0.18
+        score -= 0.24
         reasons.append("Czesc twierdzen brzmi faktograficznie, ale nie ma widocznego wsparcia.")
     if features.conspiracy_word_count and claims.evidence_marker_count == 0:
         score -= 0.12
@@ -343,6 +345,7 @@ def _score_profile(features: ProfileFeatures) -> tuple[float, list[str]]:
         score -= 0.10
         reasons.append("Nazwa profilu zawiera sygnaly typowe dla kont sensacyjnych lub podszywajacych sie.")
     if features.handle_from_text and not features.has_profile_url:
+        score -= 0.08
         reasons.append("Wykryto uchwyt profilu w tekscie/OCR, ale brakuje URL do weryfikacji.")
 
     return _clamp(score), reasons
@@ -389,9 +392,13 @@ def _apply_calibration_caps(score: float, scores: dict[str, float], input_type: 
     if scores["linguistic_score"] <= 0.35 and scores["claim_score"] <= 0.45:
         calibrated = min(calibrated, 0.38)
     if scores["source_score"] <= 0.30 and scores["consensus_score"] <= 0.35 and input_type in {"url", "document"}:
-        calibrated = min(calibrated, 0.42)
+        calibrated = min(calibrated, 0.36)
+    if scores["source_score"] <= 0.30 and scores["consensus_score"] <= 0.30 and input_type == "raw_text":
+        calibrated = min(calibrated, 0.48)
+    if scores["source_score"] <= 0.25 and input_type == "url":
+        calibrated = min(calibrated, 0.32)
     if scores["profile_score"] <= 0.30 and input_type == "screenshot":
-        calibrated = min(calibrated, 0.42)
+        calibrated = min(calibrated, 0.38)
     if scores["profile_score"] <= 0.35 and scores["text_ml_score"] <= 0.35 and input_type == "screenshot":
         calibrated = min(calibrated, 0.35)
     if scores["source_score"] >= 0.85 and scores["claim_score"] >= 0.70 and scores["ml_score"] >= 0.75:
@@ -402,33 +409,33 @@ InputType = Literal["url", "screenshot", "document", "raw_text"]
 
 SCORE_WEIGHTS: dict[InputType, dict[str, float]] = {
     "url": {
-        "source_score": 0.25,
-        "claim_score": 0.20,
-        "ml_score": 0.20,
-        "text_ml_score": 0.15,
-        "consensus_score": 0.15,
+        "source_score": 0.20,
+        "claim_score": 0.18,
+        "ml_score": 0.27,
+        "text_ml_score": 0.20,
+        "consensus_score": 0.10,
         "linguistic_score": 0.05,
     },
     "screenshot": {
-        "profile_score": 0.30,
-        "claim_score": 0.25,
-        "text_ml_score": 0.20,
-        "linguistic_score": 0.15,
-        "ml_score": 0.10,
+        "profile_score": 0.25,
+        "claim_score": 0.20,
+        "text_ml_score": 0.25,
+        "linguistic_score": 0.10,
+        "ml_score": 0.20,
     },
     "document": {
-        "claim_score": 0.25,
-        "ml_score": 0.25,
-        "text_ml_score": 0.20,
-        "linguistic_score": 0.10,
+        "claim_score": 0.20,
+        "ml_score": 0.30,
+        "text_ml_score": 0.25,
+        "linguistic_score": 0.05,
         "source_score": 0.10,
         "consensus_score": 0.10,
     },
     "raw_text": {
-        "claim_score": 0.30,
-        "text_ml_score": 0.25,
-        "linguistic_score": 0.20,
-        "ml_score": 0.15,
+        "claim_score": 0.25,
+        "text_ml_score": 0.30,
+        "linguistic_score": 0.10,
+        "ml_score": 0.25,
         "source_score": 0.05,
         "consensus_score": 0.05,
     },
