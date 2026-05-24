@@ -1,5 +1,5 @@
 from ml.features.profile_features import ProfileInput
-from ml.inference.pipeline import ArticleInput, analyze_article
+from ml.inference.pipeline import ArticleInput, _level, analyze_article
 
 
 def test_reputable_sourced_article_scores_higher_than_clickbait() -> None:
@@ -239,6 +239,17 @@ def test_repeated_lines_score_very_low() -> None:
 
     assert result.credibility_score <= 0.10
     assert "repeated_lines" in result.metadata["content_quality"]["flags"]
+
+
+def test_credibility_level_boundaries_are_strict() -> None:
+    assert _level(0.91) == "bardzo wysoka wiarygodnosc"
+    assert _level(0.82) == "wysoka wiarygodnosc"
+    assert _level(0.72) == "raczej wiarygodne"
+    assert _level(0.62) == "umiarkowana wiarygodnosc"
+    assert _level(0.52) == "slaba wiarygodnosc / wymaga weryfikacji"
+    assert _level(0.42) == "niska wiarygodnosc / mala wartosc dowodowa"
+    assert _level(0.32) == "bardzo niska wiarygodnosc / prawie brak wartosci"
+    assert _level(0.22) == "wysokie ryzyko dezinformacji lub brak wartosci analitycznej"
 
 
 def test_high_risk_claim_without_evidence_is_capped() -> None:
