@@ -13,10 +13,12 @@ def test_reputable_domain_matching_includes_subdomains_and_trusted_suffixes() ->
             "https://data.cdc.gov/dataset",
             "https://research.example.edu/paper",
         ],
+        content="The CDC dataset and university research paper describe the same public health result.",
     )
 
     assert features.known_reputable_domain is True
     assert features.reputable_source_link_count == 2
+    assert features.relevant_reputable_source_link_count == 2
 
 
 def test_suspicious_domain_hints_are_token_based() -> None:
@@ -25,6 +27,20 @@ def test_suspicious_domain_hints_are_token_based() -> None:
 
     assert neutral.suspicious_domain_hint is False
     assert suspicious.suspicious_domain_hint is True
+
+
+def test_source_link_relevance_uses_text_overlap() -> None:
+    features = extract_source_features(
+        source_links=[
+            "https://stat.gov.pl/dane",
+            "https://nature.com/astronomy",
+        ],
+        content="Raport opisuje dane i danymi publicznymi potwierdza zmiany cen zywnosci.",
+    )
+
+    assert features.source_link_count == 2
+    assert features.relevant_source_link_count == 1
+    assert features.unrelated_source_link_count == 1
 
 
 def test_expanded_text_lexicons_detect_language_signals() -> None:

@@ -48,6 +48,7 @@ def build_model_features(
         author=author,
         publish_date=publish_date,
         source_links=source_links,
+        content=content,
     ).as_dict()
     features = {
         **text,

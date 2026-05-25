@@ -6,7 +6,7 @@ from typing import Literal
 from ml.features.content_quality import ContentQuality, analyze_content_quality
 from ml.features.document_features import DocumentFeatures, extract_document_features
 from ml.features.profile_features import ProfileFeatures, ProfileInput, extract_profile_features
-from ml.features.source_features import SourceFeatures, extract_source_features
+from ml.features.source_features import SourceFeatures, extract_source_features, filter_relevant_source_links
 from ml.features.text_features import TextFeatures, extract_text_features
 from ml.inference.claims import ClaimAnalysis, analyze_claims
 from ml.inference.ml_model import predict_ml_score
@@ -56,24 +56,26 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
         author=article.author,
         publish_date=article.publish_date,
         source_links=article.source_links,
+        content=article.content,
     )
     profile_features = extract_profile_features(article.profile, article.content)
     document_features = extract_document_features(article.content)
     claim_analysis = analyze_claims(article.content)
 
-    source_score, source_reasons = _score_source(source_features)
+    source_score, source_reasons = _score_source(source_features, article.input_type)
     linguistic_score, linguistic_reasons = _score_language(text_features)
     fact_score, fact_reasons = _score_fact_markers(text_features, claim_analysis)
-    consensus_score, consensus_reasons = _score_consensus(source_features, text_features)
+    consensus_score, consensus_reasons = _score_consensus(source_features, text_features, article.input_type)
     consistency_score, consistency_reasons = _score_internal_consistency(text_features)
     claim_score, claim_reasons = _score_claims(claim_analysis, text_features)
     profile_score, profile_reasons = _score_profile(profile_features)
+    ml_url, ml_author, ml_publish_date, ml_source_links = _ml_source_inputs(article)
     ml_score, ml_reason = predict_ml_score(
         content=article.content,
-        url=article.url,
-        author=article.author,
-        publish_date=article.publish_date,
-        source_links=article.source_links,
+        url=ml_url,
+        author=ml_author,
+        publish_date=ml_publish_date,
+        source_links=ml_source_links,
     )
     text_ml_score, text_ml_reason = predict_text_ml_score(article.content)
 
@@ -156,44 +158,49 @@ def result_to_dict(result: CredibilityResult) -> dict[str, object]:
     }
 
 
-def _score_source(features: SourceFeatures) -> tuple[float, list[str]]:
+def _score_source(features: SourceFeatures, input_type: InputType) -> tuple[float, list[str]]:
     score = 0.50
     reasons: list[str] = []
+    metadata_weight = RAW_TEXT_METADATA_WEIGHT if input_type == "raw_text" else 1.0
+    source_link_count = _trusted_source_link_count(features, input_type)
+    reputable_source_link_count = _trusted_reputable_source_link_count(features, input_type)
 
     if not features.has_url:
-        score -= 0.12
+        score -= 0.12 * metadata_weight
         reasons.append("Brak URL ogranicza ocene reputacji zrodla.")
     if features.uses_https:
-        score += 0.08
+        score += 0.08 * metadata_weight
     elif features.has_url:
-        score -= 0.08
+        score -= 0.08 * metadata_weight
         reasons.append("Strona nie uzywa HTTPS.")
     if features.known_reputable_domain:
-        score += 0.22
+        score += 0.22 * metadata_weight
         reasons.append("Domena znajduje sie na liscie zrodel o wysokiej reputacji.")
     if features.suspicious_domain_hint:
         score -= 0.20
         reasons.append("Domena zawiera sygnaly typowe dla stron clickbaitowych lub spiskowych.")
     if features.has_author:
-        score += 0.08
+        score += 0.08 * metadata_weight
     else:
-        score -= 0.08
+        score -= 0.08 * metadata_weight
         reasons.append("Brakuje rozpoznanego autora.")
     if features.has_publish_date:
-        score += 0.07
+        score += 0.07 * metadata_weight
     else:
-        score -= 0.05
+        score -= 0.05 * metadata_weight
         reasons.append("Brakuje daty publikacji.")
-    if features.source_link_count >= 3:
+    if source_link_count >= 3:
         score += 0.10
-    elif features.source_link_count == 0:
+    elif source_link_count == 0:
         score -= 0.10
         reasons.append("Nie wykryto linkow do zrodel zewnetrznych.")
-    if features.reputable_source_link_count >= 2:
+    if reputable_source_link_count >= 2:
         score += 0.06
         reasons.append("Linki zrodlowe prowadza do kilku domen instytucjonalnych lub o wysokiej reputacji.")
-    elif features.reputable_source_link_count == 1:
+    elif reputable_source_link_count == 1:
         score += 0.03
+    if input_type == "raw_text" and features.unrelated_source_link_count:
+        reasons.append("Pominieto linki zrodlowe bez widocznego dopasowania do tresci tekstu.")
 
     return _clamp(score), reasons
 
@@ -265,26 +272,29 @@ def _score_fact_markers(features: TextFeatures, claims: ClaimAnalysis) -> tuple[
     return _clamp(score), reasons
 
 
-def _score_consensus(source: SourceFeatures, features: TextFeatures) -> tuple[float, list[str]]:
+def _score_consensus(source: SourceFeatures, features: TextFeatures, input_type: InputType) -> tuple[float, list[str]]:
     score = 0.45
     reasons: list[str] = []
+    source_link_count = _trusted_source_link_count(source, input_type)
+    unique_source_domain_count = _trusted_unique_source_domain_count(source, input_type)
+    reputable_source_link_count = _trusted_reputable_source_link_count(source, input_type)
 
-    if source.source_link_count >= 4:
+    if source_link_count >= 4:
         score += 0.20
         reasons.append("Artykul linkuje do kilku zewnetrznych zrodel.")
-    elif source.source_link_count >= 1:
+    elif source_link_count >= 1:
         score += 0.08
         reasons.append("Artykul zawiera przynajmniej jedno zewnetrzne zrodlo.")
     else:
         score -= 0.18
         reasons.append("Brak zewnetrznych linkow utrudnia cross-source verification.")
-    if source.unique_source_domain_count >= 3:
+    if unique_source_domain_count >= 3:
         score += 0.12
         reasons.append("Linki prowadza do kilku roznych domen, co wzmacnia consensus.")
-    elif source.source_link_count >= 3 and source.unique_source_domain_count <= 1:
+    elif source_link_count >= 3 and unique_source_domain_count <= 1:
         score -= 0.08
         reasons.append("Wiele linkow prowadzi do tej samej domeny, wiec consensus jest slaby.")
-    if source.reputable_source_link_count >= 1:
+    if reputable_source_link_count >= 1:
         score += 0.08
         reasons.append("Wsrod linkow zrodlowych jest domena o wysokiej reputacji.")
     if features.source_word_count >= 3:
@@ -424,6 +434,35 @@ def _spread_weighted_score(score: float) -> float:
     return _clamp(0.50 + ((score - 0.50) * SCORE_SPREAD_FACTOR))
 
 
+def _ml_source_inputs(article: ArticleInput) -> tuple[str | None, str | None, str | None, list[str] | None]:
+    if article.input_type != "raw_text":
+        return article.url, article.author, article.publish_date, article.source_links
+    return (
+        None,
+        None,
+        None,
+        filter_relevant_source_links(article.source_links, article.content),
+    )
+
+
+def _trusted_source_link_count(features: SourceFeatures, input_type: InputType) -> int:
+    if input_type == "raw_text":
+        return features.relevant_source_link_count
+    return features.source_link_count
+
+
+def _trusted_unique_source_domain_count(features: SourceFeatures, input_type: InputType) -> int:
+    if input_type == "raw_text":
+        return features.relevant_unique_source_domain_count
+    return features.unique_source_domain_count
+
+
+def _trusted_reputable_source_link_count(features: SourceFeatures, input_type: InputType) -> int:
+    if input_type == "raw_text":
+        return features.relevant_reputable_source_link_count
+    return features.reputable_source_link_count
+
+
 def _diagnostic_scores(
     scores: dict[str, float],
     weights: dict[str, float],
@@ -506,6 +545,7 @@ def _apply_calibration_caps(
 InputType = Literal["url", "screenshot", "document", "raw_text"]
 
 SCORE_SPREAD_FACTOR = 1.30
+RAW_TEXT_METADATA_WEIGHT = 0.25
 
 SCORE_WEIGHTS: dict[InputType, dict[str, float]] = {
     "url": {

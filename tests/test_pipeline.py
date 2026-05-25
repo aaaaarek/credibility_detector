@@ -8,6 +8,7 @@ def test_reputable_sourced_article_scores_higher_than_clickbait() -> None:
     reputable = analyze_article(
         ArticleInput(
             title="Agency report",
+            input_type="url",
             content=(
                 "The public health agency published a report on 2026-02-12. "
                 "The report includes data from 120 hospitals, laboratory results and comments from named experts. "
@@ -22,6 +23,7 @@ def test_reputable_sourced_article_scores_higher_than_clickbait() -> None:
     clickbait = analyze_article(
         ArticleInput(
             title="Secret cure",
+            input_type="url",
             content=(
                 "SHOCKING secret cure discovered! Doctors hate this simple trick and they do not want you to know. "
                 "Share now before it is deleted!!! No report, no named author and no source is provided."
@@ -45,6 +47,54 @@ def test_short_text_receives_explainability_reason() -> None:
 
     assert result.reasons
     assert any("krotki" in reason.lower() or "brak" in reason.lower() for reason in result.reasons)
+
+
+def test_raw_text_metadata_has_limited_influence_when_links_are_unrelated() -> None:
+    content = (
+        "The city office report says water tests from 24 sampling points were within legal limits. "
+        "Laboratory data, named experts and the public registry explain the method and the result."
+    )
+    baseline = analyze_article(ArticleInput(title="Water report", content=content, input_type="raw_text"))
+    with_metadata = analyze_article(
+        ArticleInput(
+            title="Water report",
+            content=content,
+            input_type="raw_text",
+            author="City office",
+            publish_date="2026-05-20",
+            source_links=["https://nature.com/astronomy"],
+        )
+    )
+
+    assert with_metadata.credibility_score <= baseline.credibility_score + 0.02
+    assert with_metadata.metadata["source_features"]["relevant_source_link_count"] == 0
+    assert with_metadata.metadata["source_features"]["unrelated_source_link_count"] == 1
+
+
+def test_raw_text_uses_only_relevant_source_links_for_consensus() -> None:
+    content = (
+        "The city office report says water tests from 24 sampling points were within legal limits. "
+        "Laboratory water data and named experts explain the public registry result."
+    )
+    unrelated = analyze_article(
+        ArticleInput(
+            title="Water report",
+            content=content,
+            input_type="raw_text",
+            source_links=["https://nature.com/astronomy"],
+        )
+    )
+    relevant = analyze_article(
+        ArticleInput(
+            title="Water report",
+            content=content,
+            input_type="raw_text",
+            source_links=["https://stat.gov.pl/water-data"],
+        )
+    )
+
+    assert relevant.metadata["source_features"]["relevant_source_link_count"] == 1
+    assert relevant.module_scores["consensus_score"] > unrelated.module_scores["consensus_score"]
 
 
 def test_pipeline_returns_ml_and_claim_scores() -> None:
