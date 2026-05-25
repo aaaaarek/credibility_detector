@@ -1,7 +1,10 @@
+import sys
 from io import BytesIO
+from types import SimpleNamespace
 
 import pytest
 from docx import Document
+from PIL import Image
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
@@ -60,6 +63,35 @@ def test_extract_pdf_file() -> None:
     assert extracted.file_type == "pdf"
     assert extracted.extraction_method == "pypdf"
     assert "Agency published a report" in extracted.content
+
+
+def test_extract_image_file_with_easyocr(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeReader:
+        def __init__(self, languages: list[str], gpu: bool, verbose: bool) -> None:
+            assert languages == ["pl", "en"]
+            assert gpu is False
+            assert verbose is False
+
+        def readtext(self, image: object, detail: int, paragraph: bool) -> list[str]:
+            assert detail == 0
+            assert paragraph is True
+            return [
+                "Agency published a report with data and experts.",
+                "The article links official research sources for verification.",
+            ]
+
+    monkeypatch.setitem(sys.modules, "easyocr", SimpleNamespace(Reader=FakeReader))
+    monkeypatch.setitem(sys.modules, "numpy", SimpleNamespace(array=lambda image: image))
+
+    image = Image.new("RGB", (320, 120), color="white")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    extracted = extract_text_from_file("screenshot.png", buffer.getvalue())
+
+    assert extracted.file_type == "png"
+    assert extracted.extraction_method == "easyocr"
+    assert "official research sources" in extracted.content
 
 
 def test_rejects_unsupported_file_type() -> None:

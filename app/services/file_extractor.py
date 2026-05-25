@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
@@ -31,7 +32,7 @@ def extract_text_from_file(filename: str, data: bytes) -> ExtractedDocument:
         method = "python-docx"
     elif extension in IMAGE_EXTENSIONS:
         content = _extract_image_text(data)
-        method = "pytesseract"
+        method = "easyocr"
     else:
         content = _extract_plain_text(data)
         method = "plain-text"
@@ -74,22 +75,23 @@ def _extract_docx_text(data: bytes) -> str:
 
 def _extract_image_text(data: bytes) -> str:
     try:
-        import pytesseract
-        from PIL import Image
-    except ImportError as exc:
-        raise RuntimeError("OCR wymaga bibliotek Pillow i pytesseract.") from exc
+        import numpy as np
+        from PIL import Image, ImageOps
 
-    try:
-        image = Image.open(BytesIO(data))
-        try:
-            return pytesseract.image_to_string(image, lang="pol+eng")
-        except pytesseract.TesseractError:
-            return pytesseract.image_to_string(image)
-    except pytesseract.TesseractNotFoundError as exc:
-        raise RuntimeError(
-            "OCR wymaga zainstalowanego programu Tesseract w systemie. "
-            "Biblioteka pytesseract jest tylko wrapperem Pythona."
-        ) from exc
+        reader = _get_easyocr_reader()
+    except ImportError as exc:
+        raise RuntimeError("OCR wymaga bibliotek Pillow, numpy i easyocr.") from exc
+
+    image = ImageOps.exif_transpose(Image.open(BytesIO(data))).convert("RGB")
+    fragments = reader.readtext(np.array(image), detail=0, paragraph=True)
+    return "\n".join(fragment.strip() for fragment in fragments if fragment.strip())
+
+
+@lru_cache(maxsize=1)
+def _get_easyocr_reader():
+    import easyocr
+
+    return easyocr.Reader(["pl", "en"], gpu=False, verbose=False)
 
 
 def _extract_plain_text(data: bytes) -> str:

@@ -5,28 +5,47 @@ from dataclasses import asdict, dataclass
 
 
 JOURNAL_MARKERS = {
-    "scientific reports",
-    "nature",
-    "springer nature",
-    "science",
-    "elsevier",
-    "the lancet",
+    "acm",
+    "arxiv",
+    "biorxiv",
     "bmj",
+    "cambridge core",
+    "cell",
+    "elsevier",
     "plos",
     "frontiers",
     "ieee",
-    "acm",
+    "jama",
+    "medrxiv",
+    "nature",
+    "nejm",
+    "oxford academic",
+    "science",
+    "scientific reports",
+    "scopus",
+    "springer nature",
+    "the lancet",
+    "wiley",
 }
 
 SECTION_MARKERS = {
     "abstract",
-    "introduction",
-    "methods",
-    "materials and methods",
-    "results",
-    "discussion",
+    "acknowledgements",
+    "background",
+    "conflict of interest",
     "conclusion",
+    "data availability",
+    "discussion",
+    "funding",
+    "introduction",
+    "limitations",
+    "materials and methods",
+    "methodology",
+    "methods",
+    "objective",
+    "results",
     "references",
+    "supplementary material",
 }
 
 
@@ -54,8 +73,8 @@ def extract_document_features(text: str) -> DocumentFeatures:
     raw_score = 0.0
     raw_score += 0.25 if doi else 0.0
     raw_score += 0.18 if any(marker in normalized for marker in JOURNAL_MARKERS) else 0.0
-    raw_score += 0.16 if re.search(r"\b(received|accepted|published)\b", normalized) else 0.0
-    raw_score += 0.12 if re.search(r"\bet al\.|\bauthor\(s\)|\bcorrespondence\b", normalized) else 0.0
+    raw_score += 0.16 if re.search(r"\b(received|revised|accepted|published|online)\b", normalized) else 0.0
+    raw_score += 0.12 if re.search(r"\bet al\.|\bauthor\(s\)|\baffiliation|correspondence|orcid\b", normalized) else 0.0
     raw_score += 0.14 if has_references else 0.0
     raw_score += min(0.15, section_count * 0.03)
 
@@ -63,8 +82,8 @@ def extract_document_features(text: str) -> DocumentFeatures:
         doi=doi,
         has_doi=bool(doi),
         has_journal_marker=any(marker in normalized for marker in JOURNAL_MARKERS),
-        has_publication_dates=bool(re.search(r"\b(received|accepted|published)\b", normalized)),
-        has_authors_marker=bool(re.search(r"\bet al\.|\bauthor\(s\)|\bcorrespondence\b", normalized)),
+        has_publication_dates=bool(re.search(r"\b(received|revised|accepted|published|online)\b", normalized)),
+        has_authors_marker=bool(re.search(r"\bet al\.|\bauthor\(s\)|\baffiliation|correspondence|orcid\b", normalized)),
         has_references=has_references,
         scientific_section_count=section_count,
         scientific_document_score=round(min(1.0, raw_score), 3),

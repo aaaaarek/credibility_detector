@@ -19,7 +19,7 @@ MVP systemu oceny wiarygodnosci artykulow. Projekt analizuje wklejony tekst albo
 - dodatkowy `profile_score` dla postow i screenshotow, gdy znane sa dane profilu autora.
 - dynamiczne wagi zalezne od typu wejscia: `url`, `raw_text`, `document`, `screenshot`.
 
-Obsluga plikow obejmuje PDF, DOCX, TXT oraz obrazy przez OCR. OCR wymaga zainstalowanego programu Tesseract w systemie.
+Obsluga plikow obejmuje PDF, DOCX, TXT oraz obrazy przez OCR. OCR korzysta z EasyOCR, wiec nie wymaga zainstalowanego programu Tesseract w systemie.
 
 ## Uruchomienie lokalne
 

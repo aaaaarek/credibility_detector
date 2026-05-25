@@ -92,7 +92,9 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
     weights = SCORE_WEIGHTS[article.input_type]
     module_scores = {name: all_scores_dict[name] for name in weights}
     diagnostic_scores = _diagnostic_scores(all_scores_dict, weights, article, profile_features)
-    final_score = _weighted_score(module_scores, weights)
+    weighted_score = _weighted_score(module_scores, weights)
+    spread_score = _spread_weighted_score(weighted_score)
+    final_score = spread_score
     final_score = _apply_calibration_caps(
         final_score,
         all_scores_dict,
@@ -126,6 +128,12 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
             "weights": weights,
             "content_quality": content_quality.as_dict(),
             "document_features": document_features.as_dict(),
+            "score_calibration": {
+                "weighted_score": round(weighted_score, 3),
+                "spread_factor": SCORE_SPREAD_FACTOR,
+                "spread_score": round(spread_score, 3),
+                "final_score": round(final_score, 3),
+            },
             "title": article.title,
             "url": article.url,
             "domain": source_features.domain,
@@ -181,6 +189,11 @@ def _score_source(features: SourceFeatures) -> tuple[float, list[str]]:
     elif features.source_link_count == 0:
         score -= 0.10
         reasons.append("Nie wykryto linkow do zrodel zewnetrznych.")
+    if features.reputable_source_link_count >= 2:
+        score += 0.06
+        reasons.append("Linki zrodlowe prowadza do kilku domen instytucjonalnych lub o wysokiej reputacji.")
+    elif features.reputable_source_link_count == 1:
+        score += 0.03
 
     return _clamp(score), reasons
 
@@ -407,6 +420,10 @@ def _weighted_score(scores: dict[str, float], weights: dict[str, float]) -> floa
     return _clamp(sum(scores[name] * weight for name, weight in weights.items()) / total_weight)
 
 
+def _spread_weighted_score(score: float) -> float:
+    return _clamp(0.50 + ((score - 0.50) * SCORE_SPREAD_FACTOR))
+
+
 def _diagnostic_scores(
     scores: dict[str, float],
     weights: dict[str, float],
@@ -487,6 +504,8 @@ def _apply_calibration_caps(
 
     return _clamp(calibrated)
 InputType = Literal["url", "screenshot", "document", "raw_text"]
+
+SCORE_SPREAD_FACTOR = 1.30
 
 SCORE_WEIGHTS: dict[InputType, dict[str, float]] = {
     "url": {

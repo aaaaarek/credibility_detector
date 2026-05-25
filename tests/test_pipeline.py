@@ -1,5 +1,7 @@
+import pytest
+
 from ml.features.profile_features import ProfileInput
-from ml.inference.pipeline import ArticleInput, _level, analyze_article
+from ml.inference.pipeline import ArticleInput, _level, _spread_weighted_score, analyze_article
 
 
 def test_reputable_sourced_article_scores_higher_than_clickbait() -> None:
@@ -64,6 +66,7 @@ def test_pipeline_returns_ml_and_claim_scores() -> None:
     assert 0 <= result.module_scores["ml_score"] <= 1
     assert 0 <= result.module_scores["text_ml_score"] <= 1
     assert 0 <= result.module_scores["claim_score"] <= 1
+    assert result.metadata["score_calibration"]["spread_factor"] == 1.30
     assert "profile_score" not in result.diagnostic_scores
     assert result.metadata["extracted_claims"]["claims"]
 
@@ -277,6 +280,12 @@ def test_credibility_level_boundaries_are_strict() -> None:
     assert _level(0.42) == "niska wiarygodnosc / mala wartosc dowodowa"
     assert _level(0.32) == "bardzo niska wiarygodnosc / prawie brak wartosci"
     assert _level(0.22) == "wysokie ryzyko dezinformacji lub brak wartosci analitycznej"
+
+
+def test_weighted_score_is_spread_around_midpoint() -> None:
+    assert _spread_weighted_score(0.50) == 0.50
+    assert _spread_weighted_score(0.60) == pytest.approx(0.63)
+    assert _spread_weighted_score(0.40) == pytest.approx(0.37)
 
 
 def test_high_risk_claim_without_evidence_is_capped() -> None:
