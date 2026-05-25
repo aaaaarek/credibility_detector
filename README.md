@@ -124,6 +124,20 @@ Walidacja realnego datasetu:
 python -m ml.training.validate_real_dataset
 ```
 
+Nie trzeba recznie wpisywac setek artykulow. Mozna wpisac URL-e do:
+
+```text
+data/datasets/real_article_urls.txt
+```
+
+i wygenerowac plik kandydatow:
+
+```bash
+python -m ml.training.collect_real_dataset_candidates
+```
+
+Skrypt zapisze `data/datasets/real_articles_candidates.csv` z pobrana trescia, metadanymi i sugerowana ocena. Te oceny sa tylko propozycjami: zaakceptowane/poprawione wiersze nalezy dopiero przeniesc do `real_articles_seed.csv`.
+
 Trening automatycznie laczy `synthetic_articles.csv` i `real_articles_seed.csv`. Realne rekordy maja domyslnie wage `1.0`, a syntetyczne `0.25`, zeby syntetyk uzupelnial dane, ale nie dominowal treningu.
 
 Trening lekkiego regresora na cechach:

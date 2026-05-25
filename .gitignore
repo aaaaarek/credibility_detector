@@ -219,3 +219,6 @@ __marimo__/
 
 # Local trained artifacts
 ml/models/*.joblib
+
+# Local dataset candidates fetched from URLs
+data/datasets/real_articles_candidates.csv

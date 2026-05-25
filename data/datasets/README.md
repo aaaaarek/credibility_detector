@@ -36,3 +36,33 @@ Suggested scale:
 Use `|` to separate multiple source links in `source_links`.
 
 Keep full copied article text only if you have the right to store it. Otherwise, store a short excerpt or notes allowed by your use case and keep the source URL for traceability.
+
+## Semi-Automatic Collection
+
+Instead of filling hundreds of rows by hand, put article URLs in:
+
+```text
+data/datasets/real_article_urls.txt
+```
+
+Then run:
+
+```bash
+python -m ml.training.collect_real_dataset_candidates
+```
+
+The script writes:
+
+```text
+data/datasets/real_articles_candidates.csv
+```
+
+Candidates include fetched title/content/metadata, a heuristic `credibility_label`, `label_reason`, and `needs_review=true`.
+Treat these labels as suggestions only. Review the rows, correct labels/reasons, and then append accepted rows to `real_articles_seed.csv`.
+
+Useful options:
+
+```bash
+python -m ml.training.collect_real_dataset_candidates --limit 20
+python -m ml.training.collect_real_dataset_candidates --input urls.txt --output candidates.csv
+```
