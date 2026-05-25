@@ -11,10 +11,10 @@ from sklearn.exceptions import InconsistentVersionWarning
 from sklearn.ensemble import GradientBoostingRegressor
 
 from ml.features.feature_builder import MODEL_FEATURE_COLUMNS, build_model_features
+from ml.training.datasets import build_feature_frame, load_training_dataset
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DATASET_PATH = ROOT / "data" / "datasets" / "synthetic_articles.csv"
 MODEL_PATH = ROOT / "ml" / "models" / "credibility_regressor.joblib"
 
 
@@ -42,33 +42,12 @@ def _load_or_train_model() -> tuple[GradientBoostingRegressor, list[str]]:
         if feature_columns == MODEL_FEATURE_COLUMNS and artifact.get("sklearn_version") == sklearn.__version__:
             return artifact["model"], feature_columns
 
-    dataset = pd.read_csv(DATASET_PATH)
-    rows = []
-    for _, row in dataset.iterrows():
-        links = _parse_links(row.get("source_links", ""))
-        rows.append(
-            build_model_features(
-                content=str(row["content"]),
-                url=_optional(row.get("url")),
-                author=_optional(row.get("author")),
-                publish_date=_optional(row.get("publish_date")),
-                source_links=links,
-            )
-        )
+    dataset = load_training_dataset()
 
     model = GradientBoostingRegressor(random_state=42)
-    model.fit(pd.DataFrame(rows)[MODEL_FEATURE_COLUMNS], dataset["credibility_label"])
+    model.fit(
+        build_feature_frame(dataset),
+        dataset["credibility_label"],
+        sample_weight=dataset["sample_weight"],
+    )
     return model, MODEL_FEATURE_COLUMNS
-
-
-def _parse_links(value: object) -> list[str]:
-    if pd.isna(value) or not str(value).strip():
-        return []
-    return [link for link in str(value).split("|") if link]
-
-
-def _optional(value: object) -> str | None:
-    if pd.isna(value):
-        return None
-    text = str(value).strip()
-    return text or None

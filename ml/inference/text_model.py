@@ -5,16 +5,16 @@ from pathlib import Path
 import warnings
 
 import joblib
-import pandas as pd
 import sklearn
 from sklearn.exceptions import InconsistentVersionWarning
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 
+from ml.training.datasets import load_training_dataset
+
 
 ROOT = Path(__file__).resolve().parents[2]
-DATASET_PATH = ROOT / "data" / "datasets" / "synthetic_articles.csv"
 MODEL_PATH = ROOT / "ml" / "models" / "text_credibility_regressor.joblib"
 TEXT_MODEL_VERSION = "tfidf-ridge-v1"
 
@@ -38,9 +38,13 @@ def _load_or_train_text_model() -> Pipeline:
         ):
             return artifact["model"]
 
-    dataset = pd.read_csv(DATASET_PATH)
+    dataset = load_training_dataset()
     model = build_text_model()
-    model.fit(dataset["content"].astype(str), dataset["credibility_label"])
+    model.fit(
+        dataset["content"].astype(str),
+        dataset["credibility_label"],
+        regressor__sample_weight=dataset["sample_weight"],
+    )
     return model
 
 

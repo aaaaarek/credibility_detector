@@ -32,6 +32,10 @@ MODEL_FEATURE_COLUMNS = [
     "source_link_count",
     "unique_source_domain_count",
     "reputable_source_link_count",
+    "relevant_source_link_count",
+    "relevant_unique_source_domain_count",
+    "relevant_reputable_source_link_count",
+    "unrelated_source_link_count",
 ]
 
 
@@ -61,5 +65,9 @@ def build_model_features(
         "source_link_count": float(source["source_link_count"]),
         "unique_source_domain_count": float(source["unique_source_domain_count"]),
         "reputable_source_link_count": float(source["reputable_source_link_count"]),
+        "relevant_source_link_count": float(source["relevant_source_link_count"]),
+        "relevant_unique_source_domain_count": float(source["relevant_unique_source_domain_count"]),
+        "relevant_reputable_source_link_count": float(source["relevant_reputable_source_link_count"]),
+        "unrelated_source_link_count": float(source["unrelated_source_link_count"]),
     }
     return {column: float(features.get(column, 0.0)) for column in MODEL_FEATURE_COLUMNS}

@@ -14,7 +14,7 @@ MVP systemu oceny wiarygodnosci artykulow. Projekt analizuje wklejony tekst albo
   - `consistency_score`,
 - finalny weighted ensemble,
 - explainability,
-- syntetyczny dataset w `data/datasets/synthetic_articles.csv`,
+- syntetyczny dataset w `data/datasets/synthetic_articles.csv` oraz miejsce na recznie oznaczony seed dataset realnych artykulow,
 - API w FastAPI i demo w Streamlit.
 - dodatkowy `profile_score` dla postow i screenshotow, gdy znane sa dane profilu autora.
 - dynamiczne wagi zalezne od typu wejscia: `url`, `raw_text`, `document`, `screenshot`.
@@ -86,7 +86,7 @@ To nie jest live scraping konta. System ocenia wiarygodnosc profilu na podstawie
 
 Odpowiedz zawiera jeden finalny `credibility_score`. Pole `module_scores` pokazuje moduly uzyte w finalnym wyniku, a `diagnostic_scores` pokazuje sygnaly pomocnicze, ktore nie byly liczone dla danego typu wejscia.
 
-## Trening modelu demonstracyjnego
+## Dataset i trening
 
 Dataset syntetyczny ma 200 rekordow i mozna go odtworzyc komenda:
 
@@ -94,7 +94,39 @@ Dataset syntetyczny ma 200 rekordow i mozna go odtworzyc komenda:
 python -m ml.training.generate_synthetic_dataset
 ```
 
-Nastepnie mozna wykorzystac go do treningu lekkiego regresora:
+Wlasne realne przyklady mozna dopisywac do:
+
+```text
+data/datasets/real_articles_seed.csv
+```
+
+Wymagane kolumny:
+
+- `title`
+- `content`
+- `url`
+- `source`
+- `author`
+- `publish_date`
+- `source_links`
+- `credibility_label`
+
+Opcjonalne, ale zalecane:
+
+- `label_reason`
+- `dataset_source`
+
+`credibility_label` jest liczba od `0.0` do `1.0`. Linki w `source_links` rozdzielamy znakiem `|`.
+
+Walidacja realnego datasetu:
+
+```bash
+python -m ml.training.validate_real_dataset
+```
+
+Trening automatycznie laczy `synthetic_articles.csv` i `real_articles_seed.csv`. Realne rekordy maja domyslnie wage `1.0`, a syntetyczne `0.25`, zeby syntetyk uzupelnial dane, ale nie dominowal treningu.
+
+Trening lekkiego regresora na cechach:
 
 ```bash
 python -m ml.training.train_model
