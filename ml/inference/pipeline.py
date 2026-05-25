@@ -64,7 +64,12 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
 
     source_score, source_reasons = _score_source(source_features, article.input_type)
     linguistic_score, linguistic_reasons = _score_language(text_features)
-    fact_score, fact_reasons = _score_fact_markers(text_features, claim_analysis)
+    fact_score, fact_reasons = _score_fact_markers(
+        text_features,
+        claim_analysis,
+        source_features,
+        content_quality,
+    )
     consensus_score, consensus_reasons = _score_consensus(source_features, text_features, article.input_type)
     consistency_score, consistency_reasons = _score_internal_consistency(text_features)
     claim_score, claim_reasons = _score_claims(claim_analysis, text_features)
@@ -243,7 +248,12 @@ def _score_language(features: TextFeatures) -> tuple[float, list[str]]:
     return _clamp(score), reasons
 
 
-def _score_fact_markers(features: TextFeatures, claims: ClaimAnalysis) -> tuple[float, list[str]]:
+def _score_fact_markers(
+    features: TextFeatures,
+    claims: ClaimAnalysis,
+    source: SourceFeatures,
+    quality: ContentQuality,
+) -> tuple[float, list[str]]:
     score = 0.45
     reasons: list[str] = []
 
@@ -265,9 +275,27 @@ def _score_fact_markers(features: TextFeatures, claims: ClaimAnalysis) -> tuple[
     if claims.unsupported_claim_count >= 2:
         score -= 0.12
         reasons.append("Wykryto kilka twierdzen bez widocznego wsparcia zrodlowego.")
+    if quality.high_risk_claim_count:
+        if source.relevant_reputable_source_link_count == 0 and claims.evidence_marker_count < 2:
+            score -= 0.28
+            reasons.append("Twierdzenia wysokiego ryzyka nie maja mocnego wsparcia w zrodlach.")
+        else:
+            score -= 0.10
+            reasons.append("Twierdzenia wysokiego ryzyka obnizaja ocene markerow faktograficznych.")
+    if features.conspiracy_word_count and claims.evidence_marker_count < 2:
+        score -= 0.14
+        reasons.append("Slownictwo spiskowe pojawia sie bez wystarczajacych markerow dowodowych.")
+    if source.source_link_count and source.relevant_source_link_count == 0:
+        score -= 0.10
+        reasons.append("Podane linki nie maja widocznego dopasowania do tresci.")
     if features.word_count < 120:
         score -= 0.12
         reasons.append("Tekst jest krotki, wiec zawiera malo materialu do weryfikacji.")
+
+    if quality.high_risk_claim_count and source.relevant_reputable_source_link_count == 0:
+        score = min(score, 0.45)
+    if features.conspiracy_word_count and claims.evidence_marker_count < 2:
+        score = min(score, 0.50)
 
     return _clamp(score), reasons
 
@@ -297,8 +325,13 @@ def _score_consensus(source: SourceFeatures, features: TextFeatures, input_type:
     if reputable_source_link_count >= 1:
         score += 0.08
         reasons.append("Wsrod linkow zrodlowych jest domena o wysokiej reputacji.")
-    if features.source_word_count >= 3:
+    if features.source_word_count >= 3 and source_link_count >= 1:
         score += 0.10
+    elif features.source_word_count >= 3:
+        score += 0.03
+    if source.source_link_count and source_link_count == 0:
+        score = min(score, 0.34)
+        reasons.append("Pominieto linki bez widocznego dopasowania do tresci, wiec consensus jest ograniczony.")
 
     return _clamp(score), reasons
 
@@ -446,19 +479,19 @@ def _ml_source_inputs(article: ArticleInput) -> tuple[str | None, str | None, st
 
 
 def _trusted_source_link_count(features: SourceFeatures, input_type: InputType) -> int:
-    if input_type == "raw_text":
+    if features.source_link_count:
         return features.relevant_source_link_count
     return features.source_link_count
 
 
 def _trusted_unique_source_domain_count(features: SourceFeatures, input_type: InputType) -> int:
-    if input_type == "raw_text":
+    if features.source_link_count:
         return features.relevant_unique_source_domain_count
     return features.unique_source_domain_count
 
 
 def _trusted_reputable_source_link_count(features: SourceFeatures, input_type: InputType) -> int:
-    if input_type == "raw_text":
+    if features.source_link_count:
         return features.relevant_reputable_source_link_count
     return features.reputable_source_link_count
 

@@ -97,6 +97,49 @@ def test_raw_text_uses_only_relevant_source_links_for_consensus() -> None:
     assert relevant.module_scores["consensus_score"] > unrelated.module_scores["consensus_score"]
 
 
+def test_url_consensus_ignores_unrelated_links() -> None:
+    result = analyze_article(
+        ArticleInput(
+            title="Water report",
+            input_type="url",
+            content=(
+                "The city office report says water tests from 24 sampling points were within legal limits. "
+                "Laboratory water data and named experts explain the public registry result."
+            ),
+            url="https://example.com/water-report",
+            author="City desk",
+            publish_date="2026-05-20",
+            source_links=[
+                "https://nature.com/astronomy",
+                "https://science.org/space",
+                "https://reuters.com/world/elections",
+                "https://who.int/vaccines",
+            ],
+        )
+    )
+
+    assert result.metadata["source_features"]["relevant_source_link_count"] == 0
+    assert result.module_scores["consensus_score"] <= 0.34
+
+
+def test_fact_score_is_capped_for_high_risk_claims_without_strong_evidence() -> None:
+    result = analyze_article(
+        ArticleInput(
+            title="Cudowny lek",
+            input_type="raw_text",
+            content=(
+                "Raport twierdzi, ze cudowny preparat leczy wszystkie nowotwory w 24 godziny. "
+                "Autor podaje 97 procent skutecznosci, 120 pacjentow i 3 kliniki, ale nie pokazuje "
+                "recenzowanego badania ani publicznego zbioru danych."
+            ),
+            source_links=["https://nature.com/astronomy"],
+        )
+    )
+
+    assert result.metadata["content_quality"]["high_risk_claim_count"] >= 1
+    assert result.diagnostic_scores["fact_score"] <= 0.45
+
+
 def test_pipeline_returns_ml_and_claim_scores() -> None:
     result = analyze_article(
         ArticleInput(
