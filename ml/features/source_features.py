@@ -214,7 +214,7 @@ def _is_relevant_source_link(link: str, content: str) -> bool:
 
 
 def _link_tokens(netloc: str, path: str, query: str) -> list[str]:
-    raw = " ".join([netloc, path, query]).replace("_", "-")
+    raw = " ".join([netloc, path, query]).replace("_", " ").replace("-", " ")
     tokens = _text_tokens(_normalize_text(raw))
     return [token for token in tokens if token not in GENERIC_LINK_TOKENS and len(token) >= 3]
 
@@ -226,17 +226,9 @@ def _text_tokens(text: str) -> list[str]:
 def _token_matches_text(link_token: str, text_tokens: set[str]) -> bool:
     if link_token in text_tokens:
         return True
-    if len(link_token) <= 3:
-        return False
-    stems = {link_token[:4]}
     if link_token == "dane":
-        stems.add("dan")
-    return any(
-        text_token.startswith(stem) or link_token.startswith(text_token[:4])
-        for stem in stems
-        for text_token in text_tokens
-        if len(text_token) >= 4
-    )
+        return any(text_token.startswith("dan") for text_token in text_tokens if len(text_token) >= 4)
+    return False
 
 
 def _normalize_text(text: str) -> str:

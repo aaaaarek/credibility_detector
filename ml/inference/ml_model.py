@@ -29,7 +29,7 @@ def predict_ml_score(
     features = build_model_features(content, url, author, publish_date, source_links)
     frame = pd.DataFrame([{column: features.get(column, 0.0) for column in feature_columns}])
     prediction = float(model.predict(frame)[0])
-    return max(0.0, min(1.0, prediction)), "ml_score wyliczony przez regresor trenowany na syntetycznym datasecie."
+    return max(0.0, min(1.0, prediction)), "ml_score wyliczony przez regresor trenowany na mieszanym datasecie."
 
 
 @lru_cache(maxsize=1)

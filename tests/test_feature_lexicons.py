@@ -43,6 +43,23 @@ def test_source_link_relevance_uses_text_overlap() -> None:
     assert features.unrelated_source_link_count == 1
 
 
+def test_source_link_relevance_ignores_navigation_prefix_collisions() -> None:
+    features = extract_source_features(
+        source_links=[
+            "https://poczta.onet.pl",
+            "https://konto.onet.pl/dashboard",
+            "https://stat.gov.pl/dane",
+        ],
+        content=(
+            "Na poczatku raport kontynuuje opis cen zywnosci. "
+            "Dane publiczne z urzedu statystycznego potwierdzaja wynik."
+        ),
+    )
+
+    assert features.relevant_source_link_count == 1
+    assert features.unrelated_source_link_count == 2
+
+
 def test_expanded_text_lexicons_detect_language_signals() -> None:
     features = extract_text_features(
         "Mainstream media won't tell you this alarming story. "

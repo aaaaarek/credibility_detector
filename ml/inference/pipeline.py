@@ -100,8 +100,10 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
     module_scores = {name: all_scores_dict[name] for name in weights}
     diagnostic_scores = _diagnostic_scores(all_scores_dict, weights, article, profile_features)
     weighted_score = _weighted_score(module_scores, weights)
+    disagreement_penalty = _disagreement_penalty(module_scores, weights)
     spread_score = _spread_weighted_score(weighted_score)
-    final_score = spread_score
+    disagreement_adjusted_score = _clamp(spread_score - disagreement_penalty)
+    final_score = disagreement_adjusted_score
     final_score = _apply_calibration_caps(
         final_score,
         all_scores_dict,
@@ -139,6 +141,8 @@ def analyze_article(article: ArticleInput) -> CredibilityResult:
                 "weighted_score": round(weighted_score, 3),
                 "spread_factor": SCORE_SPREAD_FACTOR,
                 "spread_score": round(spread_score, 3),
+                "disagreement_penalty": round(disagreement_penalty, 3),
+                "disagreement_adjusted_score": round(disagreement_adjusted_score, 3),
                 "final_score": round(final_score, 3),
             },
             "title": article.title,
@@ -463,6 +467,17 @@ def _weighted_score(scores: dict[str, float], weights: dict[str, float]) -> floa
     return _clamp(sum(scores[name] * weight for name, weight in weights.items()) / total_weight)
 
 
+def _disagreement_penalty(scores: dict[str, float], weights: dict[str, float]) -> float:
+    total_weight = sum(weights.values())
+    if total_weight <= 0:
+        return 0.0
+    weighted_mean = _weighted_score(scores, weights)
+    variance = sum(weights[name] * ((scores[name] - weighted_mean) ** 2) for name in weights) / total_weight
+    weighted_std = variance**0.5
+    penalty = max(0.0, weighted_std - SCORE_DISAGREEMENT_FREE_BAND) * SCORE_DISAGREEMENT_PENALTY_FACTOR
+    return min(MAX_SCORE_DISAGREEMENT_PENALTY, penalty)
+
+
 def _spread_weighted_score(score: float) -> float:
     return _clamp(0.50 + ((score - 0.50) * SCORE_SPREAD_FACTOR))
 
@@ -470,11 +485,14 @@ def _spread_weighted_score(score: float) -> float:
 def _ml_source_inputs(article: ArticleInput) -> tuple[str | None, str | None, str | None, list[str] | None]:
     if article.input_type != "raw_text":
         return article.url, article.author, article.publish_date, article.source_links
+    relevant_source_links = filter_relevant_source_links(article.source_links, article.content)
+    if article.url:
+        return article.url, article.author, article.publish_date, relevant_source_links
     return (
         None,
         None,
         None,
-        filter_relevant_source_links(article.source_links, article.content),
+        relevant_source_links,
     )
 
 
@@ -578,6 +596,9 @@ def _apply_calibration_caps(
 InputType = Literal["url", "screenshot", "document", "raw_text"]
 
 SCORE_SPREAD_FACTOR = 1.30
+SCORE_DISAGREEMENT_FREE_BAND = 0.14
+SCORE_DISAGREEMENT_PENALTY_FACTOR = 0.45
+MAX_SCORE_DISAGREEMENT_PENALTY = 0.12
 RAW_TEXT_METADATA_WEIGHT = 0.25
 
 SCORE_WEIGHTS: dict[InputType, dict[str, float]] = {

@@ -91,5 +91,54 @@ def test_validate_real_dataset_rejects_label_outside_range(tmp_path: Path) -> No
         validate_real_dataset(real_path)
 
 
+def test_validate_real_dataset_rejects_rows_still_needing_review(tmp_path: Path) -> None:
+    real_path = tmp_path / "real.csv"
+    _write_dataset(
+        real_path,
+        [
+            {
+                "title": "Candidate",
+                "content": "This candidate has enough article text for validation.",
+                "url": "https://example.com",
+                "source": "candidate",
+                "author": "Reporter",
+                "publish_date": "2026-03-03",
+                "source_links": "",
+                "credibility_label": 0.55,
+                "label_reason": "Manual review still pending.",
+                "dataset_source": "url_candidate",
+                "needs_review": "true",
+            }
+        ],
+    )
+
+    with pytest.raises(ValueError, match="needs_review"):
+        validate_real_dataset(real_path)
+
+
+def test_validate_real_dataset_rejects_auto_suggested_labels(tmp_path: Path) -> None:
+    real_path = tmp_path / "real.csv"
+    _write_dataset(
+        real_path,
+        [
+            {
+                "title": "Candidate",
+                "content": "This candidate has enough article text for validation.",
+                "url": "https://example.com",
+                "source": "candidate",
+                "author": "Reporter",
+                "publish_date": "2026-03-03",
+                "source_links": "",
+                "credibility_label": 0.55,
+                "label_reason": "AUTO-SUGGESTION: neutral automatic estimate",
+                "dataset_source": "url_candidate",
+            }
+        ],
+    )
+
+    with pytest.raises(ValueError, match="auto-suggested"):
+        validate_real_dataset(real_path)
+
+
 def _write_dataset(path: Path, rows: list[dict[str, object]]) -> None:
     pd.DataFrame(rows).to_csv(path, index=False)

@@ -61,10 +61,13 @@ def _render_result(result: dict[str, object]) -> None:
         f"""
         <div style="
             color: {color};
-            font-size: 1.05rem;
-            font-weight: 700;
-            margin-top: -0.75rem;
-            margin-bottom: 0.75rem;
+            font-size: 2.25rem;
+            line-height: 1.15;
+            font-weight: 800;
+            letter-spacing: 0;
+            margin-top: -0.35rem;
+            margin-bottom: 1rem;
+            overflow-wrap: anywhere;
         ">
             {result["credibility_level"]}
         </div>
@@ -118,6 +121,7 @@ with tab_text:
     )
     input_type = "screenshot" if text_mode == "Tekst z posta/screenshotu" else "raw_text"
     content = st.text_area("Tresc artykulu", height=280, placeholder="Wklej tresc artykulu...")
+    source_url = st.text_input("URL zrodla", placeholder="Opcjonalnie, np. https://...")
     col_a, col_b = st.columns(2)
     author = col_a.text_input("Autor", placeholder="Opcjonalnie")
     publish_date = col_b.text_input("Data publikacji", placeholder="Opcjonalnie")
@@ -129,14 +133,35 @@ with tab_text:
             st.error("Wklej przynajmniej 40 znakow tekstu.")
         else:
             links = [line.strip() for line in links_raw.splitlines() if line.strip()]
+            source_url_clean = source_url.strip() or None
+            analysis_input_type = input_type
+            analysis_title = title or None
+            analysis_author = author or None
+            analysis_publish_date = publish_date or None
+            analysis_links = links
+
+            if source_url_clean and input_type == "raw_text":
+                try:
+                    fetched_context = fetch_article(source_url_clean)
+                except Exception as exc:
+                    st.warning(f"Nie udalo sie pobrac metadanych URL zrodla: {exc}")
+                else:
+                    analysis_input_type = "url"
+                    analysis_title = analysis_title or fetched_context.title
+                    analysis_author = analysis_author or fetched_context.author
+                    analysis_publish_date = analysis_publish_date or fetched_context.publish_date
+                    if not analysis_links:
+                        analysis_links = fetched_context.source_links
+
             result = analyze_article(
                 ArticleInput(
-                    title=title or None,
+                    title=analysis_title,
                     content=content,
-                    input_type=input_type,
-                    author=author or None,
-                    publish_date=publish_date or None,
-                    source_links=links,
+                    input_type=analysis_input_type,
+                    url=source_url_clean,
+                    author=analysis_author,
+                    publish_date=analysis_publish_date,
+                    source_links=analysis_links,
                     profile=text_profile,
                 )
             )

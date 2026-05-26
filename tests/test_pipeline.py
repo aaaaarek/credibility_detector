@@ -1,7 +1,7 @@
 import pytest
 
 from ml.features.profile_features import ProfileInput
-from ml.inference.pipeline import ArticleInput, _level, _spread_weighted_score, analyze_article
+from ml.inference.pipeline import ArticleInput, _disagreement_penalty, _level, _spread_weighted_score, analyze_article
 
 
 def test_reputable_sourced_article_scores_higher_than_clickbait() -> None:
@@ -69,6 +69,29 @@ def test_raw_text_metadata_has_limited_influence_when_links_are_unrelated() -> N
     assert with_metadata.credibility_score <= baseline.credibility_score + 0.02
     assert with_metadata.metadata["source_features"]["relevant_source_link_count"] == 0
     assert with_metadata.metadata["source_features"]["unrelated_source_link_count"] == 1
+
+
+def test_raw_text_source_url_can_inform_ml_score_when_provided() -> None:
+    content = (
+        "The city office report says water tests from 24 sampling points were within legal limits. "
+        "Laboratory data, named experts and the public registry explain the method and the result."
+    )
+    baseline = analyze_article(ArticleInput(title="Water report", content=content, input_type="raw_text"))
+    with_source_url = analyze_article(
+        ArticleInput(
+            title="Water report",
+            content=content,
+            input_type="raw_text",
+            url="https://gov.pl/water-report",
+            author="City office",
+            publish_date="2026-05-20",
+            source_links=["https://stat.gov.pl/water-data"],
+        )
+    )
+
+    assert with_source_url.module_scores["ml_score"] > baseline.module_scores["ml_score"]
+    assert with_source_url.credibility_score > baseline.credibility_score
+    assert with_source_url.metadata["source_features"]["has_url"] is True
 
 
 def test_raw_text_uses_only_relevant_source_links_for_consensus() -> None:
@@ -379,6 +402,22 @@ def test_weighted_score_is_spread_around_midpoint() -> None:
     assert _spread_weighted_score(0.50) == 0.50
     assert _spread_weighted_score(0.60) == pytest.approx(0.63)
     assert _spread_weighted_score(0.40) == pytest.approx(0.37)
+
+
+def test_disagreement_penalty_only_applies_to_divergent_module_scores() -> None:
+    weights = {"source_score": 1.0, "claim_score": 1.0, "text_ml_score": 1.0}
+
+    aligned_penalty = _disagreement_penalty(
+        {"source_score": 0.70, "claim_score": 0.72, "text_ml_score": 0.68},
+        weights,
+    )
+    divergent_penalty = _disagreement_penalty(
+        {"source_score": 0.90, "claim_score": 0.90, "text_ml_score": 0.30},
+        weights,
+    )
+
+    assert aligned_penalty == 0.0
+    assert divergent_penalty == pytest.approx(0.064, abs=0.001)
 
 
 def test_high_risk_claim_without_evidence_is_capped() -> None:

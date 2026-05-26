@@ -107,6 +107,11 @@ def _prepare_dataset(dataset: pd.DataFrame, dataset_source: str, sample_weight: 
     if prepared["content"].astype(str).str.strip().eq("").any():
         raise ValueError(f"{path} contains rows with empty content.")
 
+    if "needs_review" in prepared.columns and _has_true_marker(prepared["needs_review"]):
+        raise ValueError(f"{path} contains rows still marked as needs_review.")
+    if "label_reason" in prepared.columns and _has_auto_suggestion_reason(prepared["label_reason"]):
+        raise ValueError(f"{path} contains auto-suggested labels that need manual review.")
+
     prepared["dataset_source"] = prepared["dataset_source"].replace("", pd.NA).fillna(dataset_source)
     if "sample_weight" not in dataset.columns or prepared["sample_weight"].astype(str).str.strip().eq("").all():
         prepared["sample_weight"] = sample_weight
@@ -134,3 +139,12 @@ def _parse_links(value: object) -> list[str]:
     if pd.isna(value):
         return []
     return [link.strip() for link in str(value).split("|") if link.strip()]
+
+
+def _has_true_marker(values: pd.Series) -> bool:
+    true_markers = {"1", "true", "tak", "yes", "y"}
+    return values.fillna("").astype(str).str.strip().str.lower().isin(true_markers).any()
+
+
+def _has_auto_suggestion_reason(values: pd.Series) -> bool:
+    return values.fillna("").astype(str).str.strip().str.upper().str.startswith("AUTO-SUGGESTION").any()
