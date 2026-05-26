@@ -31,11 +31,11 @@ Recommended columns:
 
 Suggested scale:
 
-- `0.90-1.00`: official report, scientific article, or highly sourced news item.
-- `0.70-0.85`: normal news item with author, date, and verifiable sources.
+- `0.75-1.00`: highly sourced and trustorthy news item.
+- `0.65-0.75`: normal news item with author, date, and verifiable sources.
 - `0.50-0.65`: opinion, blog, or partial context with some verification value.
-- `0.30-0.45`: one-sided, weakly sourced, or clickbait-like text.
-- `0.00-0.25`: scam, unsupported conspiracy, fabricated claim, or high-risk misinformation.
+- `0.35-0.50`: one-sided, weakly sourced, or clickbait-like text.
+- `0.00-0.35`: scam, unsupported conspiracy, fabricated claim, or high-risk misinformation.
 
 Use `|` to separate multiple source links in `source_links`.
 
