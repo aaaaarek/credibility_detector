@@ -388,11 +388,11 @@ def test_repeated_lines_score_very_low() -> None:
 
 
 def test_credibility_level_boundaries_are_strict() -> None:
-    assert _level(0.75) == "wysoka wiarygodnosc / silnie uzrodlowiony material"
-    assert _level(0.65) == "normalny artykul z autorem, data i weryfikowalnymi zrodlami"
-    assert _level(0.50) == "opinia, blog lub czesciowy kontekst z pewna wartoscia weryfikacyjna"
-    assert _level(0.35) == "jednostronny, slabo uzrodlowiony lub clickbaitowy tekst"
-    assert _level(0.34) == "wysokie ryzyko: scam, spisek, fabrykacja lub dezinformacja"
+    assert _level(0.75) == "bardzo wysoka wiarygodnosc"
+    assert _level(0.65) == "wysoka wiarygodnosc"
+    assert _level(0.50) == "umiarkowana wiarygodnosc"
+    assert _level(0.35) == "niska wiarygodnosc"
+    assert _level(0.34) == "zerowa wartosc artykulu"
 
 
 def test_weighted_score_is_spread_around_midpoint() -> None:
