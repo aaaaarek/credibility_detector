@@ -31,7 +31,7 @@ Recommended columns:
 
 Suggested scale:
 
-- `0.75-1.00`: highly sourced and trustorthy news item.
+- `0.75-1.00`: highly sourced and trustworthy news item.
 - `0.65-0.75`: normal news item with author, date, and verifiable sources.
 - `0.50-0.65`: opinion, blog, or partial context with some verification value.
 - `0.35-0.50`: one-sided, weakly sourced, or clickbait-like text.

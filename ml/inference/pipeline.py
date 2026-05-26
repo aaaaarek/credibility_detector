@@ -425,21 +425,15 @@ def _score_profile(features: ProfileFeatures) -> tuple[float, list[str]]:
 
 
 def _level(score: float) -> str:
-    if score >= 0.90:
-        return "bardzo wysoka wiarygodnosc"
-    if score >= 0.80:
-        return "wysoka wiarygodnosc"
-    if score >= 0.70:
-        return "raczej wiarygodne"
-    if score >= 0.60:
-        return "umiarkowana wiarygodnosc"
+    if score >= 0.75:
+        return "wysoka wiarygodnosc / silnie uzrodlowiony material"
+    if score >= 0.65:
+        return "normalny artykul z autorem, data i weryfikowalnymi zrodlami"
     if score >= 0.50:
-        return "slaba wiarygodnosc / wymaga weryfikacji"
-    if score >= 0.40:
-        return "niska wiarygodnosc / mala wartosc dowodowa"
-    if score >= 0.30:
-        return "bardzo niska wiarygodnosc / prawie brak wartosci"
-    return "wysokie ryzyko dezinformacji lub brak wartosci analitycznej"
+        return "opinia, blog lub czesciowy kontekst z pewna wartoscia weryfikacyjna"
+    if score >= 0.35:
+        return "jednostronny, slabo uzrodlowiony lub clickbaitowy tekst"
+    return "wysokie ryzyko: scam, spisek, fabrykacja lub dezinformacja"
 
 
 def _clamp(value: float) -> float:

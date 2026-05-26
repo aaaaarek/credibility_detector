@@ -40,15 +40,13 @@ def _optional_int(value: str) -> int | None:
 
 
 def _score_color(score: float) -> str:
-    if score >= 0.80:
+    if score >= 0.75:
         return "#16803c"
-    if score >= 0.70:
+    if score >= 0.65:
         return "#2f8f4e"
-    if score >= 0.60:
-        return "#b7791f"
     if score >= 0.50:
-        return "#b45309"
-    if score >= 0.40:
+        return "#b7791f"
+    if score >= 0.35:
         return "#c2410c"
     return "#b91c1c"
 
