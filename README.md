@@ -37,7 +37,19 @@ http://127.0.0.1:8000/docs
 Streamlit:
 
 ```bash
-streamlit run app/ui/streamlit_app.py
+python -m streamlit run app/ui/streamlit_app.py
+```
+
+Jesli uzywasz lokalnego virtualenv bez aktywowania srodowiska:
+
+```bash
+./.venv/bin/python -m streamlit run app/ui/streamlit_app.py
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\python -m streamlit run app/ui/streamlit_app.py
 ```
 
 Docker Compose:
