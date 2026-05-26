@@ -9,7 +9,9 @@ from ml.features.feature_builder import MODEL_FEATURE_COLUMNS, build_model_featu
 
 ROOT = Path(__file__).resolve().parents[2]
 SYNTHETIC_DATASET_PATH = ROOT / "data" / "datasets" / "synthetic_articles.csv"
-REAL_DATASET_PATH = ROOT / "data" / "datasets" / "real_articles_seed.csv"
+PUBLIC_REAL_DATASET_PATH = ROOT / "data" / "datasets" / "real_articles_seed.csv"
+LOCAL_REAL_DATASET_PATH = ROOT / "data" / "datasets" / "real_articles_seed.local.csv"
+REAL_DATASET_PATH = LOCAL_REAL_DATASET_PATH if LOCAL_REAL_DATASET_PATH.exists() else PUBLIC_REAL_DATASET_PATH
 
 REQUIRED_COLUMNS = [
     "title",

@@ -14,7 +14,7 @@ MVP systemu oceny wiarygodnosci artykulow. Projekt analizuje wklejony tekst albo
   - `consistency_score`,
 - finalny weighted ensemble z kara za rozjazd modulow,
 - explainability,
-- syntetyczny dataset w `data/datasets/synthetic_articles.csv` oraz miejsce na recznie oznaczony seed dataset realnych artykulow,
+- syntetyczny dataset w `data/datasets/synthetic_articles.csv` oraz skrypt do lokalnego zebrania seed datasetu realnych artykulow,
 - API w FastAPI i demo w Streamlit.
 - dodatkowy `profile_score` dla postow i screenshotow, gdy znane sa dane profilu autora.
 - dynamiczne wagi zalezne od typu wejscia: `url`, `raw_text`, `document`, `screenshot`.
@@ -94,11 +94,19 @@ Dataset syntetyczny ma 200 rekordow i mozna go odtworzyc komenda:
 python -m ml.training.generate_synthetic_dataset
 ```
 
-Wlasne realne przyklady mozna dopisywac do:
+Publiczne repo nie zawiera pelnego CSV z realnymi artykulami, bo taki plik moze zawierac skopiowane tresci chronione prawem autorskim. W repo zostaje tylko naglowek/szablon:
 
 ```text
 data/datasets/real_articles_seed.csv
 ```
+
+Pelny lokalny seed dataset mozna trzymac poza Gitem w:
+
+```text
+data/datasets/real_articles_seed.local.csv
+```
+
+Kod automatycznie uzyje pliku `.local.csv`, jesli istnieje.
 
 Wymagane kolumny:
 
@@ -136,7 +144,7 @@ i wygenerowac plik kandydatow:
 python -m ml.training.collect_real_dataset_candidates
 ```
 
-Skrypt zapisze `data/datasets/real_articles_candidates.csv` z pobrana trescia, metadanymi i sugerowana ocena. Te oceny sa tylko propozycjami: zaakceptowane/poprawione wiersze nalezy dopiero przeniesc do `real_articles_seed.csv`.
+Skrypt zapisze `data/datasets/real_articles_candidates.csv` z pobrana trescia, metadanymi i sugerowana ocena. Ten plik jest ignorowany przez Git, zeby nie publikowac pelnych tresci artykulow. Te oceny sa tylko propozycjami: zaakceptowane/poprawione wiersze nalezy dopiero przeniesc do lokalnego `real_articles_seed.local.csv`.
 
 Trening automatycznie laczy `synthetic_articles.csv` i `real_articles_seed.csv`. Realne rekordy maja domyslnie wage `1.0`, a syntetyczne `0.25`, zeby syntetyk uzupelnial dane, ale nie dominowal treningu.
 

@@ -222,3 +222,6 @@ ml/models/*.joblib
 
 # Local dataset candidates fetched from URLs
 data/datasets/real_articles_candidates.csv
+
+# Local reviewed real-article dataset with copied article text
+data/datasets/real_articles_seed.local.csv

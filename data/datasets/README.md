@@ -3,7 +3,11 @@
 ## Files
 
 - `synthetic_articles.csv` contains generated MVP examples.
-- `real_articles_seed.csv` is the reviewed, hand-labeled real-article seed dataset.
+- `real_articles_seed.csv` is a public header-only placeholder for the reviewed real-article seed dataset.
+- `real_articles_seed.local.csv` can contain the reviewed local real-article dataset and is ignored by Git.
+
+The full real-article CSV is intentionally not committed because it may contain copied article text.
+The repository includes the URL list and collection code needed to recreate local candidates.
 
 ## Real Article Schema
 
@@ -58,7 +62,7 @@ data/datasets/real_articles_candidates.csv
 ```
 
 Candidates include fetched title/content/metadata, a heuristic `credibility_label`, `label_reason`, and `needs_review=true`.
-Treat these labels as suggestions only. Review the rows, correct labels/reasons, and then append accepted rows to `real_articles_seed.csv`.
+Treat these labels as suggestions only. Review the rows, correct labels/reasons, and then append accepted rows to `real_articles_seed.local.csv`.
 Rows copied into the seed file must not keep `needs_review=true` or `AUTO-SUGGESTION` label reasons.
 
 Useful options:
